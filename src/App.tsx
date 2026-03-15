@@ -65,6 +65,7 @@ const App = () => (
                 </PublicRoute>
               }
             />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
