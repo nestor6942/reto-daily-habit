@@ -1,21 +1,33 @@
 import { useAppData } from "@/hooks/useAppData";
+import { useAuth } from "@/contexts/AuthContext";
 import { ChallengeCard } from "@/components/ChallengeCard";
 import { AddChallengeForm } from "@/components/AddChallengeForm";
 import { StreakBadge } from "@/components/StreakBadge";
 import { HistoryList } from "@/components/HistoryList";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, History } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Target, History, LogOut } from "lucide-react";
 
 const Index = () => {
+  const { signOut } = useAuth();
   const {
     challenges,
     history,
     streakCount,
+    loading,
     addChallenge,
     increment,
     removeChallenge,
   } = useAppData();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -30,7 +42,18 @@ const Index = () => {
               Supera tus metas cada día
             </p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={signOut}
+              className="w-10 h-10 text-muted-foreground"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-5 h-5" />
+            </Button>
+          </div>
         </header>
 
         {/* Streak */}
