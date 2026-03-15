@@ -1,158 +1,211 @@
 import { useState, useEffect, useCallback } from "react";
-import type { AppData, Challenge, DailyRecord } from "@/types/challenge";
-
-const STORAGE_KEY = "reto-diario-data";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Challenge, DailyRecord } from "@/types/challenge";
 
 const getToday = () => new Date().toISOString().split("T")[0];
 
-const getDefaultData = (): AppData => ({
-  challenges: [],
-  history: [],
-  streakCount: 0,
-  lastCompletedDate: null,
-});
-
-const loadData = (): AppData => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return getDefaultData();
-    return JSON.parse(raw) as AppData;
-  } catch {
-    return getDefaultData();
-  }
-};
-
 export function useAppData() {
-  const [data, setData] = useState<AppData>(loadData);
+  const { user } = useAuth();
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [history, setHistory] = useState<DailyRecord[]>([]);
+  const [streakCount, setStreakCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
+  // Load data from database
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
+    if (!user) return;
 
-  // Reset current values if it's a new day
-  useEffect(() => {
-    const today = getToday();
-    const lastDate = data.lastCompletedDate;
-    // Check if we need to snapshot yesterday and reset
-    const stored = loadData();
-    if (stored.challenges.some((c) => c.currentValue > 0)) {
-      // If there's progress from a previous session, check date
-      const sessionDate = localStorage.getItem("reto-diario-session-date");
-      if (sessionDate && sessionDate !== today) {
-        // Save yesterday's record, reset values
-        const completed = stored.challenges.filter(
-          (c) => c.currentValue >= c.targetValue
+    const load = async () => {
+      setLoading(true);
+      const [challengesRes, historyRes, streakRes] = await Promise.all([
+        supabase
+          .from("challenges")
+          .select("*")
+          .eq("user_id", user.id),
+        supabase
+          .from("daily_records")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("date", { ascending: false })
+          .limit(90),
+        supabase
+          .from("user_streaks")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
+
+      if (challengesRes.data) {
+        setChallenges(
+          challengesRes.data.map((c) => ({
+            id: c.id,
+            name: c.name,
+            targetValue: c.target_value,
+            currentValue: c.current_value,
+          }))
         );
-        const allDone =
-          stored.challenges.length > 0 &&
-          completed.length === stored.challenges.length;
-
-        const record: DailyRecord = {
-          date: sessionDate,
-          challengesCompleted: completed.map((c) => c.name),
-          totalChallenges: stored.challenges.length,
-          allCompleted: allDone,
-        };
-
-        const newStreak = allDone
-          ? stored.streakCount + 1
-          : 0;
-
-        setData({
-          ...stored,
-          challenges: stored.challenges.map((c) => ({
-            ...c,
-            currentValue: 0,
-          })),
-          history: [record, ...stored.history].slice(0, 90),
-          streakCount: newStreak,
-          lastCompletedDate: allDone ? sessionDate : stored.lastCompletedDate,
-        });
       }
-    }
-    localStorage.setItem("reto-diario-session-date", today);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  const addChallenge = useCallback((name: string, targetValue: number) => {
-    setData((prev) => ({
-      ...prev,
-      challenges: [
-        ...prev.challenges,
-        {
-          id: crypto.randomUUID(),
+      if (historyRes.data) {
+        setHistory(
+          historyRes.data.map((r) => ({
+            date: r.date,
+            challengesCompleted: r.challenges_completed || [],
+            totalChallenges: r.total_challenges,
+            allCompleted: r.all_completed,
+          }))
+        );
+      }
+
+      if (streakRes.data) {
+        setStreakCount(streakRes.data.streak_count);
+      }
+
+      setLoading(false);
+    };
+
+    load();
+  }, [user]);
+
+  const addChallenge = useCallback(
+    async (name: string, targetValue: number) => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("challenges")
+        .insert({
+          user_id: user.id,
           name,
-          targetValue,
-          currentValue: 0,
-        },
-      ],
-    }));
-  }, []);
+          target_value: targetValue,
+          current_value: 0,
+        })
+        .select()
+        .single();
 
-  const increment = useCallback((id: string) => {
-    setData((prev) => {
-      const challenges = prev.challenges.map((c) =>
-        c.id === id && c.currentValue < c.targetValue
-          ? { ...c, currentValue: c.currentValue + 1 }
-          : c
+      if (data && !error) {
+        setChallenges((prev) => [
+          ...prev,
+          {
+            id: data.id,
+            name: data.name,
+            targetValue: data.target_value,
+            currentValue: data.current_value,
+          },
+        ]);
+      }
+    },
+    [user]
+  );
+
+  const increment = useCallback(
+    async (id: string) => {
+      if (!user) return;
+
+      const challenge = challenges.find((c) => c.id === id);
+      if (!challenge || challenge.currentValue >= challenge.targetValue) return;
+
+      const newValue = challenge.currentValue + 1;
+
+      const { error } = await supabase
+        .from("challenges")
+        .update({ current_value: newValue })
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) return;
+
+      const updated = challenges.map((c) =>
+        c.id === id ? { ...c, currentValue: newValue } : c
       );
+      setChallenges(updated);
 
+      // Check if all done
       const allDone =
-        challenges.length > 0 &&
-        challenges.every((c) => c.currentValue >= c.targetValue);
+        updated.length > 0 &&
+        updated.every((c) => c.currentValue >= c.targetValue);
 
-      // Auto-record completion
-      if (allDone && !prev.challenges.every((c) => c.currentValue >= c.targetValue)) {
+      if (allDone) {
         const today = getToday();
-        const alreadyRecorded = prev.history.some((h) => h.date === today);
+        const alreadyRecorded = history.some((h) => h.date === today);
+
         if (!alreadyRecorded) {
-          const record: DailyRecord = {
-            date: today,
-            challengesCompleted: challenges.map((c) => c.name),
-            totalChallenges: challenges.length,
-            allCompleted: true,
-          };
+          // Upsert daily record
+          await supabase.from("daily_records").upsert(
+            {
+              user_id: user.id,
+              date: today,
+              challenges_completed: updated.map((c) => c.name),
+              total_challenges: updated.length,
+              all_completed: true,
+            },
+            { onConflict: "user_id,date" }
+          );
 
+          // Update streak
+          const { data: streakData } = await supabase
+            .from("user_streaks")
+            .select("*")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          const lastDate = streakData?.last_completed_date;
           const isConsecutive =
-            prev.lastCompletedDate === null ||
-            daysBetween(prev.lastCompletedDate, today) <= 1;
+            !lastDate || daysBetween(lastDate, today) <= 1;
+          const newStreak = isConsecutive
+            ? (streakData?.streak_count || 0) + 1
+            : 1;
 
-          return {
+          await supabase.from("user_streaks").upsert(
+            {
+              user_id: user.id,
+              streak_count: newStreak,
+              last_completed_date: today,
+            },
+            { onConflict: "user_id" }
+          );
+
+          setStreakCount(newStreak);
+          setHistory((prev) => [
+            {
+              date: today,
+              challengesCompleted: updated.map((c) => c.name),
+              totalChallenges: updated.length,
+              allCompleted: true,
+            },
             ...prev,
-            challenges,
-            history: [record, ...prev.history].slice(0, 90),
-            streakCount: isConsecutive ? prev.streakCount + 1 : 1,
-            lastCompletedDate: today,
-          };
+          ]);
         }
       }
+    },
+    [user, challenges, history]
+  );
 
-      return { ...prev, challenges };
-    });
-  }, []);
+  const removeChallenge = useCallback(
+    async (id: string) => {
+      if (!user) return;
 
-  const removeChallenge = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      challenges: prev.challenges.filter((c) => c.id !== id),
-    }));
-  }, []);
+      const { error } = await supabase
+        .from("challenges")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
 
-  const resetToday = useCallback(() => {
-    setData((prev) => ({
-      ...prev,
-      challenges: prev.challenges.map((c) => ({ ...c, currentValue: 0 })),
-    }));
-  }, []);
+      if (!error) {
+        setChallenges((prev) => prev.filter((c) => c.id !== id));
+      }
+    },
+    [user]
+  );
 
   return {
-    challenges: data.challenges,
-    history: data.history,
-    streakCount: data.streakCount,
+    challenges,
+    history,
+    streakCount,
+    loading,
     addChallenge,
     increment,
     removeChallenge,
-    resetToday,
   };
 }
 
