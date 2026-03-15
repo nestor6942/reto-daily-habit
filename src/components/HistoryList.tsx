@@ -1,5 +1,6 @@
 import type { DailyRecord } from "@/types/challenge";
 import { CalendarCheck, CalendarX } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface Props {
   history: DailyRecord[];
@@ -8,15 +9,19 @@ interface Props {
 export function HistoryList({ history }: Props) {
   if (history.length === 0) {
     return (
-      <p className="text-center text-muted-foreground py-8 text-sm">
+      <motion.p
+        className="text-center text-muted-foreground py-8 text-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
         Aún no hay historial. ¡Completa tu primer día!
-      </p>
+      </motion.p>
     );
   }
 
   return (
     <div className="space-y-2">
-      {history.map((record) => {
+      {history.map((record, i) => {
         const d = new Date(record.date + "T12:00:00");
         const label = d.toLocaleDateString("es-ES", {
           weekday: "short",
@@ -25,11 +30,15 @@ export function HistoryList({ history }: Props) {
         });
 
         return (
-          <div
+          <motion.div
             key={record.date}
             className={`flex items-center gap-3 rounded-xl p-3 ${
               record.allCompleted ? "bg-success/10" : "bg-muted"
             }`}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.05 }}
+            whileHover={{ x: 4 }}
           >
             {record.allCompleted ? (
               <CalendarCheck className="w-5 h-5 text-success shrink-0" />
@@ -42,7 +51,7 @@ export function HistoryList({ history }: Props) {
                 {record.challengesCompleted.length}/{record.totalChallenges} completados
               </p>
             </div>
-          </div>
+          </motion.div>
         );
       })}
     </div>
