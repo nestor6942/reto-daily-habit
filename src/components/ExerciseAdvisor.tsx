@@ -177,7 +177,7 @@ export function ExerciseAdvisor() {
               </button>
             </div>
 
-            {!weightSet ? (
+            {!dataSet ? (
               /* Weight input */
               <motion.div
                 initial={{ opacity: 0 }}
