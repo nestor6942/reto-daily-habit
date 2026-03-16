@@ -28,13 +28,17 @@ export function ExerciseAdvisor() {
 
   const startChat = () => {
     const w = parseFloat(weight);
+    const h = parseFloat(height);
     if (!w || w < 20 || w > 300) {
       toast.error("Ingresa un peso válido (20-300 kg)");
       return;
     }
-    setWeightSet(true);
-    // Auto-send first message
-    sendMessage("Hola, ¿qué ejercicios me recomiendas?", w);
+    if (!h || h < 100 || h > 250) {
+      toast.error("Ingresa una altura válida (100-250 cm)");
+      return;
+    }
+    setDataSet(true);
+    sendMessage("Hola, ¿qué ejercicios me recomiendas?", w, h);
   };
 
   const sendMessage = async (text: string, w?: number) => {
