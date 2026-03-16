@@ -130,8 +130,9 @@ export function ExerciseAdvisor() {
 
   const resetChat = () => {
     setMessages([]);
-    setWeightSet(false);
+    setDataSet(false);
     setWeight("");
+    setHeight("");
     setInput("");
     setOpen(false);
   };
