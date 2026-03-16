@@ -41,7 +41,7 @@ export function ExerciseAdvisor() {
     sendMessage("Hola, ¿qué ejercicios me recomiendas?", w, h);
   };
 
-  const sendMessage = async (text: string, w?: number) => {
+  const sendMessage = async (text: string, w?: number, h?: number) => {
     const userMsg: Msg = { role: "user", content: text };
     const currentMessages = [...messages, userMsg];
     setMessages(currentMessages);
@@ -59,6 +59,7 @@ export function ExerciseAdvisor() {
         },
         body: JSON.stringify({
           weight: w || parseFloat(weight),
+          height: h || parseFloat(height),
           messages: currentMessages,
         }),
       });
