@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Dumbbell, Footprints, Timer, Flame, Waves, Mountain, Bike, PersonStanding } from "lucide-react";
+import { Plus, Dumbbell, Footprints, Timer, Flame, Waves, Mountain, Bike, PersonStanding, Activity, StretchHorizontal, Zap, HeartPulse } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const PRESET_EXERCISES = [
