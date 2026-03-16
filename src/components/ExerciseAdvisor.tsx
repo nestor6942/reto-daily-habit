@@ -13,7 +13,8 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exercise-adv
 export function ExerciseAdvisor() {
   const [open, setOpen] = useState(false);
   const [weight, setWeight] = useState("");
-  const [weightSet, setWeightSet] = useState(false);
+  const [height, setHeight] = useState("");
+  const [dataSet, setDataSet] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -27,16 +28,20 @@ export function ExerciseAdvisor() {
 
   const startChat = () => {
     const w = parseFloat(weight);
+    const h = parseFloat(height);
     if (!w || w < 20 || w > 300) {
       toast.error("Ingresa un peso válido (20-300 kg)");
       return;
     }
-    setWeightSet(true);
-    // Auto-send first message
-    sendMessage("Hola, ¿qué ejercicios me recomiendas?", w);
+    if (!h || h < 100 || h > 250) {
+      toast.error("Ingresa una altura válida (100-250 cm)");
+      return;
+    }
+    setDataSet(true);
+    sendMessage("Hola, ¿qué ejercicios me recomiendas?", w, h);
   };
 
-  const sendMessage = async (text: string, w?: number) => {
+  const sendMessage = async (text: string, w?: number, h?: number) => {
     const userMsg: Msg = { role: "user", content: text };
     const currentMessages = [...messages, userMsg];
     setMessages(currentMessages);
@@ -54,6 +59,7 @@ export function ExerciseAdvisor() {
         },
         body: JSON.stringify({
           weight: w || parseFloat(weight),
+          height: h || parseFloat(height),
           messages: currentMessages,
         }),
       });
@@ -124,8 +130,9 @@ export function ExerciseAdvisor() {
 
   const resetChat = () => {
     setMessages([]);
-    setWeightSet(false);
+    setDataSet(false);
     setWeight("");
+    setHeight("");
     setInput("");
     setOpen(false);
   };
@@ -170,7 +177,7 @@ export function ExerciseAdvisor() {
               </button>
             </div>
 
-            {!weightSet ? (
+            {!dataSet ? (
               /* Weight input */
               <motion.div
                 initial={{ opacity: 0 }}
@@ -179,7 +186,7 @@ export function ExerciseAdvisor() {
               >
                 <div className="text-center space-y-2">
                   <Weight className="w-10 h-10 text-primary mx-auto" />
-                  <p className="text-sm text-foreground font-medium">¿Cuánto pesas?</p>
+                  <p className="text-sm text-foreground font-medium">Cuéntanos sobre ti</p>
                   <p className="text-xs text-muted-foreground">Te recomendaré ejercicios adecuados para ti</p>
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); startChat(); }} className="space-y-3">
@@ -192,6 +199,15 @@ export function ExerciseAdvisor() {
                     max={300}
                     className="h-12 text-center text-lg"
                     autoFocus
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Tu altura en cm"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    min={100}
+                    max={250}
+                    className="h-12 text-center text-lg"
                   />
                   <Button type="submit" className="w-full h-12 bg-primary text-primary-foreground">
                     Obtener recomendaciones

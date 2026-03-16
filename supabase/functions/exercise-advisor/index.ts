@@ -9,18 +9,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { weight, messages } = await req.json();
+    const { weight, height, messages } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `Eres un entrenador personal experto en fitness. El usuario pesa ${weight} kg.
+    const bmi = height ? (weight / ((height / 100) ** 2)).toFixed(1) : null;
+    const bmiInfo = bmi ? ` Su IMC es ${bmi}.` : "";
 
-Tu trabajo es recomendar ejercicios adecuados según su peso corporal. Considera:
+    const systemPrompt = `Eres un entrenador personal experto en fitness. El usuario pesa ${weight} kg y mide ${height} cm.${bmiInfo}
+
+Tu trabajo es recomendar ejercicios adecuados según su peso, altura e IMC. Considera:
 - Ejercicios de bajo impacto para personas con sobrepeso (IMC > 25)
 - Progresiones graduales para principiantes
 - Ejercicios que protejan las articulaciones
 - Rutinas equilibradas (cardio, fuerza, flexibilidad)
-- Repeticiones y series apropiadas según el peso
+- Repeticiones y series apropiadas según el peso y altura
+- Calcular y mencionar su IMC al inicio de la conversación
 
 Responde siempre en español. Sé motivador pero realista. Usa formato con emojis para hacerlo visual.
 Si el usuario pregunta algo no relacionado con ejercicio/fitness, redirige amablemente al tema.
