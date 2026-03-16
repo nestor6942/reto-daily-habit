@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Target, History, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ExerciseAdvisor } from "@/components/ExerciseAdvisor";
 
 const Index = () => {
   const { signOut } = useAuth();
@@ -148,6 +149,7 @@ const Index = () => {
           </Tabs>
         </motion.div>
       </div>
+      <ExerciseAdvisor />
     </div>
   );
 };

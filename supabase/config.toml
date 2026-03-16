@@ -1,1 +1,4 @@
 project_id = "xhynfigfoqngfhehrbpn"
+
+[functions.exercise-advisor]
+verify_jwt = false
