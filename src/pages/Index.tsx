@@ -149,6 +149,7 @@ const Index = () => {
           </Tabs>
         </motion.div>
       </div>
+      <ExerciseAdvisor />
     </div>
   );
 };
