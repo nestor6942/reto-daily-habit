@@ -13,7 +13,8 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exercise-adv
 export function ExerciseAdvisor() {
   const [open, setOpen] = useState(false);
   const [weight, setWeight] = useState("");
-  const [weightSet, setWeightSet] = useState(false);
+  const [height, setHeight] = useState("");
+  const [dataSet, setDataSet] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
