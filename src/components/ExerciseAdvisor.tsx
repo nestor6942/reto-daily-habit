@@ -186,7 +186,7 @@ export function ExerciseAdvisor() {
               >
                 <div className="text-center space-y-2">
                   <Weight className="w-10 h-10 text-primary mx-auto" />
-                  <p className="text-sm text-foreground font-medium">¿Cuánto pesas?</p>
+                  <p className="text-sm text-foreground font-medium">Cuéntanos sobre ti</p>
                   <p className="text-xs text-muted-foreground">Te recomendaré ejercicios adecuados para ti</p>
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); startChat(); }} className="space-y-3">
@@ -199,6 +199,15 @@ export function ExerciseAdvisor() {
                     max={300}
                     className="h-12 text-center text-lg"
                     autoFocus
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Tu altura en cm"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    min={100}
+                    max={250}
+                    className="h-12 text-center text-lg"
                   />
                   <Button type="submit" className="w-full h-12 bg-primary text-primary-foreground">
                     Obtener recomendaciones
