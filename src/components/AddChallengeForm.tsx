@@ -11,6 +11,10 @@ const PRESET_EXERCISES = [
   { name: "Burpees", icon: Timer, defaultTarget: 15 },
   { name: "Plancha (seg)", icon: Mountain, defaultTarget: 60 },
   { name: "Saltos de tijera", icon: Footprints, defaultTarget: 50 },
+  { name: "Jumping Jacks", icon: Zap, defaultTarget: 50 },
+  { name: "Correr (min)", icon: Activity, defaultTarget: 20 },
+  { name: "Yoga (min)", icon: HeartPulse, defaultTarget: 15 },
+  { name: "Estiramientos (min)", icon: StretchHorizontal, defaultTarget: 10 },
   { name: "Natación (min)", icon: Waves, defaultTarget: 30 },
   { name: "Ciclismo (min)", icon: Bike, defaultTarget: 30 },
 ];
