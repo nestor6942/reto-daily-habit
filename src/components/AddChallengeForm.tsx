@@ -1,22 +1,55 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Dumbbell, Footprints, Timer, Flame, Waves, Mountain, Bike, PersonStanding, Activity, StretchHorizontal, Zap, HeartPulse } from "lucide-react";
+import {
+  Plus, Dumbbell, Footprints, Timer, Flame, Waves, Mountain, Bike,
+  PersonStanding, Activity, StretchHorizontal, Zap, HeartPulse,
+  Swords, Target, Skull, Crown, Rocket, Shield
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const PRESET_EXERCISES = [
-  { name: "Flexiones", icon: Dumbbell, defaultTarget: 30 },
-  { name: "Sentadillas", icon: PersonStanding, defaultTarget: 50 },
-  { name: "Abdominales", icon: Flame, defaultTarget: 40 },
-  { name: "Burpees", icon: Timer, defaultTarget: 15 },
-  { name: "Plancha (seg)", icon: Mountain, defaultTarget: 60 },
-  { name: "Saltos de tijera", icon: Footprints, defaultTarget: 50 },
-  { name: "Jumping Jacks", icon: Zap, defaultTarget: 50 },
-  { name: "Correr (min)", icon: Activity, defaultTarget: 20 },
-  { name: "Yoga (min)", icon: HeartPulse, defaultTarget: 15 },
-  { name: "Estiramientos (min)", icon: StretchHorizontal, defaultTarget: 10 },
-  { name: "Natación (min)", icon: Waves, defaultTarget: 30 },
-  { name: "Ciclismo (min)", icon: Bike, defaultTarget: 30 },
+type Category = "fuerza" | "cardio" | "flexibilidad" | "extremo";
+
+const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
+  { key: "fuerza", label: "Fuerza", emoji: "💪" },
+  { key: "cardio", label: "Cardio", emoji: "🏃" },
+  { key: "flexibilidad", label: "Flex", emoji: "🧘" },
+  { key: "extremo", label: "Extremo", emoji: "🔥" },
+];
+
+const PRESET_EXERCISES: { name: string; icon: typeof Dumbbell; defaultTarget: number; category: Category; difficulty: 1 | 2 | 3 }[] = [
+  // Fuerza
+  { name: "Flexiones", icon: Dumbbell, defaultTarget: 30, category: "fuerza", difficulty: 1 },
+  { name: "Sentadillas", icon: PersonStanding, defaultTarget: 50, category: "fuerza", difficulty: 1 },
+  { name: "Flexiones diamante", icon: Swords, defaultTarget: 15, category: "fuerza", difficulty: 2 },
+  { name: "Dominadas", icon: Crown, defaultTarget: 10, category: "fuerza", difficulty: 3 },
+  { name: "Plancha (seg)", icon: Mountain, defaultTarget: 60, category: "fuerza", difficulty: 2 },
+  { name: "Fondos de tríceps", icon: Shield, defaultTarget: 20, category: "fuerza", difficulty: 2 },
+  // Cardio
+  { name: "Jumping Jacks", icon: Zap, defaultTarget: 50, category: "cardio", difficulty: 1 },
+  { name: "Saltos de tijera", icon: Footprints, defaultTarget: 50, category: "cardio", difficulty: 1 },
+  { name: "Burpees", icon: Timer, defaultTarget: 15, category: "cardio", difficulty: 2 },
+  { name: "Correr (min)", icon: Activity, defaultTarget: 20, category: "cardio", difficulty: 1 },
+  { name: "Ciclismo (min)", icon: Bike, defaultTarget: 30, category: "cardio", difficulty: 1 },
+  { name: "Mountain climbers", icon: Rocket, defaultTarget: 40, category: "cardio", difficulty: 2 },
+  // Flexibilidad
+  { name: "Yoga (min)", icon: HeartPulse, defaultTarget: 15, category: "flexibilidad", difficulty: 1 },
+  { name: "Estiramientos (min)", icon: StretchHorizontal, defaultTarget: 10, category: "flexibilidad", difficulty: 1 },
+  { name: "Natación (min)", icon: Waves, defaultTarget: 30, category: "flexibilidad", difficulty: 2 },
+  // Extremo
+  { name: "100 Burpees", icon: Skull, defaultTarget: 100, category: "extremo", difficulty: 3 },
+  { name: "Sentadillas con salto", icon: Flame, defaultTarget: 30, category: "extremo", difficulty: 3 },
+  { name: "Zancadas", icon: Target, defaultTarget: 40, category: "extremo", difficulty: 2 },
+  { name: "Sprints (seg)", icon: Zap, defaultTarget: 120, category: "extremo", difficulty: 3 },
+  { name: "Saltos al cajón", icon: Rocket, defaultTarget: 20, category: "extremo", difficulty: 3 },
+];
+
+const DIFFICULTY_LABELS = ["", "Fácil", "Medio", "Bestia"];
+const DIFFICULTY_COLORS = [
+  "",
+  "text-success bg-success/10 border-success/30",
+  "text-streak bg-streak/10 border-streak/30",
+  "text-destructive bg-destructive/10 border-destructive/30",
 ];
 
 interface Props {
@@ -26,9 +59,12 @@ interface Props {
 export function AddChallengeForm({ onAdd }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"select" | "custom">("select");
+  const [category, setCategory] = useState<Category>("fuerza");
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+
+  const filteredExercises = PRESET_EXERCISES.filter((p) => p.category === category);
 
   const handlePresetSelect = (preset: typeof PRESET_EXERCISES[0]) => {
     setSelectedPreset(preset.name);
@@ -50,6 +86,7 @@ export function AddChallengeForm({ onAdd }: Props) {
     setTarget("");
     setSelectedPreset(null);
     setMode("select");
+    setCategory("fuerza");
     setOpen(false);
   };
 
@@ -117,8 +154,26 @@ export function AddChallengeForm({ onAdd }: Props) {
                 transition={{ duration: 0.15 }}
                 className="space-y-3"
               >
+                {/* Category filter */}
+                <div className="flex gap-1.5">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      onClick={() => { setCategory(cat.key); setSelectedPreset(null); setName(""); setTarget(""); }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                        category === cat.key
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-secondary text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {cat.emoji} {cat.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
-                  {PRESET_EXERCISES.map((preset) => {
+                  {filteredExercises.map((preset) => {
                     const Icon = preset.icon;
                     const isSelected = selectedPreset === preset.name;
                     return (
@@ -127,14 +182,21 @@ export function AddChallengeForm({ onAdd }: Props) {
                         type="button"
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handlePresetSelect(preset)}
-                        className={`flex items-center gap-2 p-3 rounded-xl border text-left text-sm font-medium transition-all ${
+                        className={`flex flex-col gap-1.5 p-3 rounded-xl border text-left text-sm transition-all ${
                           isSelected
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border bg-background text-foreground hover:border-primary/50"
                         }`}
                       >
-                        <Icon className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{preset.name}</span>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2">
+                            <Icon className="w-4 h-4 shrink-0" />
+                            <span className="font-medium truncate">{preset.name}</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border w-fit ${DIFFICULTY_COLORS[preset.difficulty]}`}>
+                          {DIFFICULTY_LABELS[preset.difficulty]}
+                        </span>
                       </motion.button>
                     );
                   })}
@@ -158,7 +220,7 @@ export function AddChallengeForm({ onAdd }: Props) {
                     />
                     <div className="flex gap-2">
                       <Button type="submit" className="flex-1 h-12 bg-primary text-primary-foreground">
-                        Guardar
+                        💪 ¡A por ello!
                       </Button>
                       <Button type="button" variant="ghost" onClick={resetForm} className="h-12">
                         Cancelar
@@ -200,7 +262,7 @@ export function AddChallengeForm({ onAdd }: Props) {
                 />
                 <div className="flex gap-2">
                   <Button type="submit" className="flex-1 h-12 bg-primary text-primary-foreground">
-                    Guardar
+                    💪 ¡A por ello!
                   </Button>
                   <Button type="button" variant="ghost" onClick={resetForm} className="h-12">
                     Cancelar
