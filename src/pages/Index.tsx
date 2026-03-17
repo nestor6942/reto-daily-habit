@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useAppData } from "@/hooks/useAppData";
 import { useAuth } from "@/contexts/AuthContext";
 import { ChallengeCard } from "@/components/ChallengeCard";
@@ -5,6 +6,9 @@ import { AddChallengeForm } from "@/components/AddChallengeForm";
 import { StreakBadge } from "@/components/StreakBadge";
 import { HistoryList } from "@/components/HistoryList";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { MotivationalBanner } from "@/components/MotivationalBanner";
+import { CelebrationOverlay } from "@/components/CelebrationOverlay";
+import { DailyChallengeSuggestion } from "@/components/DailyChallengeSuggestion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Target, History, LogOut } from "lucide-react";
@@ -23,6 +27,27 @@ const Index = () => {
     removeChallenge,
   } = useAppData();
 
+  const completedCount = challenges.filter((c) => c.currentValue >= c.targetValue).length;
+  const allDone = challenges.length > 0 && completedCount === challenges.length;
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [prevAllDone, setPrevAllDone] = useState(false);
+
+  useEffect(() => {
+    if (allDone && !prevAllDone) {
+      setShowCelebration(true);
+      // Reset so it can trigger again
+      const t = setTimeout(() => setShowCelebration(false), 5000);
+      return () => clearTimeout(t);
+    }
+    setPrevAllDone(allDone);
+  }, [allDone, prevAllDone]);
+
+  const handleAcceptDailyChallenge = async (exercises: { name: string; target: number }[]) => {
+    for (const ex of exercises) {
+      await addChallenge(ex.name, ex.target);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -37,6 +62,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <CelebrationOverlay show={showCelebration} streakCount={streakCount} />
       <div className="mx-auto max-w-md px-4 pb-8">
         {/* Header */}
         <motion.header
@@ -82,6 +108,13 @@ const Index = () => {
           )}
         </AnimatePresence>
 
+        {/* Motivational Banner */}
+        <MotivationalBanner
+          streakCount={streakCount}
+          challengesCount={challenges.length}
+          completedCount={completedCount}
+        />
+
         {/* Tabs */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -101,6 +134,12 @@ const Index = () => {
             </TabsList>
 
             <TabsContent value="today" className="space-y-3 mt-0">
+              {/* Daily Challenge Suggestion */}
+              <DailyChallengeSuggestion
+                onAccept={handleAcceptDailyChallenge}
+                hasChallenges={challenges.length > 0}
+              />
+
               <AnimatePresence mode="popLayout">
                 {challenges.length === 0 && (
                   <motion.p
@@ -110,7 +149,7 @@ const Index = () => {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                   >
-                    No tienes retos aún. ¡Añade uno!
+                    No tienes retos aún. ¡Acepta el reto del día o añade uno!
                   </motion.p>
                 )}
                 {challenges.map((c, i) => (
