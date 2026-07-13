@@ -134,15 +134,20 @@ export default function Auth() {
             </div>
 
             <form onSubmit={handleForgotPassword} className="space-y-4">
-              <Input
-                type="email"
-                placeholder="Correo electrónico"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-12"
-                autoFocus
-              />
+              <div className="space-y-1">
+                <Label htmlFor="forgot-email">Correo electrónico</Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="tucorreo@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12"
+                  autoFocus
+                />
+              </div>
+
               <motion.div whileTap={{ scale: 0.98 }}>
                 <Button type="submit" className="w-full h-12" disabled={loading}>
                   {loading ? "Enviando..." : "Enviar enlace"}
