@@ -195,23 +195,32 @@ export default function Auth() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.15 }}
             >
-              <Input
-                type="email"
-                placeholder="Correo electrónico"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-12"
-              />
-              <Input
-                type="password"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="h-12"
-              />
+              <div className="space-y-1">
+                <Label htmlFor="auth-email">Correo electrónico</Label>
+                <Input
+                  id="auth-email"
+                  type="email"
+                  placeholder="tucorreo@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="auth-password">Contraseña</Label>
+                <Input
+                  id="auth-password"
+                  type="password"
+                  placeholder="Al menos 6 caracteres"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="h-12"
+                />
+              </div>
+
 
               {view === "login" && (
                 <div className="text-right">
@@ -273,6 +282,8 @@ export default function Auth() {
           </motion.div>
         )}
       </AnimatePresence>
+      </main>
     </div>
   );
 }
+
