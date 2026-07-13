@@ -5,20 +5,41 @@ import { Bot, Send, X, Weight, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exercise-advisor`;
 
 export function ExerciseAdvisor() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
+  const [fitnessGoal, setFitnessGoal] = useState<string | null>(null);
   const [dataSet, setDataSet] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-load profile data when opening
+  useEffect(() => {
+    if (!open || !user || dataSet) return;
+    const loadProfile = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("weight_kg, height_cm, fitness_goal")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (data?.weight_kg) setWeight(String(data.weight_kg));
+      if (data?.height_cm) setHeight(String(data.height_cm));
+      if (data?.fitness_goal) setFitnessGoal(data.fitness_goal);
+    };
+    loadProfile();
+  }, [open, user, dataSet]);
 
   useEffect(() => {
     if (scrollRef.current) {
