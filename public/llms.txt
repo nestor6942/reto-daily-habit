@@ -1,0 +1,10 @@
+# Reto Diario
+
+> Aplicación minimalista para seguir tus retos diarios de ejercicio y hábitos, con rachas, celebraciones y un asistente de IA que sugiere ejercicios según tu peso, altura y objetivos.
+
+Reto Diario ayuda a mantener la constancia en hábitos de fitness y bienestar mediante retos diarios personalizables, seguimiento de rachas y un asistente inteligente de recomendaciones.
+
+## Pages
+
+- [Inicio](/): Panel principal con retos del día, rachas y asistente de ejercicios.
+- [Iniciar sesión](/auth): Acceso y registro con correo o Google.

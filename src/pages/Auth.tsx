@@ -3,11 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Target, ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PageMeta } from "@/components/PageMeta";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+
 
 type View = "login" | "register" | "forgot";
 
@@ -82,10 +85,29 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <PageMeta
+        title={
+          view === "forgot"
+            ? "Recuperar contraseña — Reto Diario"
+            : view === "register"
+            ? "Crear cuenta — Reto Diario"
+            : "Iniciar sesión — Reto Diario"
+        }
+        description={
+          view === "forgot"
+            ? "Restablece tu contraseña de Reto Diario con un enlace enviado a tu correo electrónico."
+            : view === "register"
+            ? "Crea tu cuenta gratuita en Reto Diario y empieza a rastrear tus retos diarios de ejercicio y hábitos."
+            : "Inicia sesión en Reto Diario para continuar con tus retos diarios, rachas y asistente de ejercicios."
+        }
+        path="/auth"
+      />
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
+      <main className="w-full max-w-sm">
       <AnimatePresence mode="wait">
+
         {view === "forgot" ? (
           <motion.div
             key="forgot"
@@ -112,15 +134,20 @@ export default function Auth() {
             </div>
 
             <form onSubmit={handleForgotPassword} className="space-y-4">
-              <Input
-                type="email"
-                placeholder="Correo electrónico"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-12"
-                autoFocus
-              />
+              <div className="space-y-1">
+                <Label htmlFor="forgot-email">Correo electrónico</Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="tucorreo@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12"
+                  autoFocus
+                />
+              </div>
+
               <motion.div whileTap={{ scale: 0.98 }}>
                 <Button type="submit" className="w-full h-12" disabled={loading}>
                   {loading ? "Enviando..." : "Enviar enlace"}
@@ -168,23 +195,32 @@ export default function Auth() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.15 }}
             >
-              <Input
-                type="email"
-                placeholder="Correo electrónico"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-12"
-              />
-              <Input
-                type="password"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="h-12"
-              />
+              <div className="space-y-1">
+                <Label htmlFor="auth-email">Correo electrónico</Label>
+                <Input
+                  id="auth-email"
+                  type="email"
+                  placeholder="tucorreo@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="auth-password">Contraseña</Label>
+                <Input
+                  id="auth-password"
+                  type="password"
+                  placeholder="Al menos 6 caracteres"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="h-12"
+                />
+              </div>
+
 
               {view === "login" && (
                 <div className="text-right">
@@ -246,6 +282,8 @@ export default function Auth() {
           </motion.div>
         )}
       </AnimatePresence>
+      </main>
     </div>
   );
 }
+

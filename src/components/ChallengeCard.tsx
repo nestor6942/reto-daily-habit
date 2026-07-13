@@ -54,6 +54,7 @@ export function ChallengeCard({ challenge, onIncrement, onRemove }: Props) {
                   size="icon"
                   onClick={onIncrement}
                   className="w-14 h-14 rounded-full text-2xl bg-primary text-primary-foreground hover:bg-primary/90"
+                  aria-label={`Sumar progreso al reto ${name}`}
                 >
                   <Plus className="w-7 h-7" />
                 </Button>
@@ -66,6 +67,7 @@ export function ChallengeCard({ challenge, onIncrement, onRemove }: Props) {
               variant="ghost"
               onClick={onRemove}
               className="w-10 h-10 text-muted-foreground hover:text-destructive"
+              aria-label={`Eliminar reto ${name}`}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
