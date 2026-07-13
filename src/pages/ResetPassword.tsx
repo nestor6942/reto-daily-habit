@@ -3,9 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Target } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PageMeta } from "@/components/PageMeta";
 import { toast } from "sonner";
+
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -57,10 +60,15 @@ export default function ResetPassword() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <PageMeta
+        title="Restablecer contraseña — Reto Diario"
+        description="Establece una nueva contraseña para tu cuenta de Reto Diario y sigue rastreando tus retos diarios."
+        path="/reset-password"
+      />
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
-      <div className="w-full max-w-sm space-y-6">
+      <main className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-2">
             <Target className="w-8 h-8 text-primary" />
@@ -72,30 +80,39 @@ export default function ResetPassword() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            type="password"
-            placeholder="Nueva contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="h-12"
-            autoFocus
-          />
-          <Input
-            type="password"
-            placeholder="Confirmar contraseña"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={6}
-            className="h-12"
-          />
+          <div className="space-y-1">
+            <Label htmlFor="new-password">Nueva contraseña</Label>
+            <Input
+              id="new-password"
+              type="password"
+              placeholder="Al menos 6 caracteres"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="h-12"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="confirm-password">Confirmar contraseña</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              placeholder="Repite la contraseña"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+              className="h-12"
+            />
+          </div>
           <Button type="submit" className="w-full h-12" disabled={loading || !ready}>
             {loading ? "Actualizando..." : "Actualizar contraseña"}
           </Button>
         </form>
-      </div>
+      </main>
     </div>
   );
 }
+
