@@ -11,12 +11,14 @@ import { CelebrationOverlay } from "@/components/CelebrationOverlay";
 import { DailyChallengeSuggestion } from "@/components/DailyChallengeSuggestion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Target, History, LogOut } from "lucide-react";
+import { Target, History, LogOut, UserCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ExerciseAdvisor } from "@/components/ExerciseAdvisor";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const { signOut } = useAuth();
+  const navigate = useNavigate();
   const {
     challenges,
     history,
@@ -80,6 +82,15 @@ const Index = () => {
             </p>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => navigate("/profile")}
+              className="w-10 h-10 text-muted-foreground"
+              title="Mi perfil"
+            >
+              <UserCircle className="w-5 h-5" />
+            </Button>
             <ThemeToggle />
             <Button
               size="icon"
