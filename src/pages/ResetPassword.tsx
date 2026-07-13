@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Target } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -48,8 +49,8 @@ export default function ResetPassword() {
       if (error) throw error;
       toast.success("¡Contraseña actualizada correctamente!");
       navigate("/");
-    } catch (error: any) {
-      toast.error(error.message || "Error al actualizar la contraseña");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Error al actualizar la contraseña"));
     } finally {
       setLoading(false);
     }

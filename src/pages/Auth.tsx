@@ -8,6 +8,7 @@ import { Target, ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { getErrorMessage } from "@/lib/utils";
 
 type View = "login" | "register" | "forgot";
 
@@ -31,8 +32,8 @@ export default function Auth() {
         redirect_uri: window.location.origin,
       });
       if (error) throw error;
-    } catch (error: any) {
-      toast.error(error.message || "Error al iniciar sesión con Google");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Error al iniciar sesión con Google"));
       setGoogleLoading(false);
     }
   };
@@ -55,8 +56,8 @@ export default function Auth() {
         if (error) throw error;
         toast.success("¡Revisa tu correo para confirmar tu cuenta!");
       }
-    } catch (error: any) {
-      toast.error(error.message || "Ha ocurrido un error");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Ha ocurrido un error"));
     } finally {
       setLoading(false);
     }
@@ -73,8 +74,8 @@ export default function Auth() {
       });
       if (error) throw error;
       toast.success("¡Revisa tu correo! Te hemos enviado un enlace para restablecer tu contraseña.");
-    } catch (error: any) {
-      toast.error(error.message || "Ha ocurrido un error");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Ha ocurrido un error"));
     } finally {
       setLoading(false);
     }
