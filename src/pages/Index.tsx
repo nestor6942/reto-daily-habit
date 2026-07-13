@@ -72,7 +72,7 @@ const Index = () => {
         path="/"
       />
       <CelebrationOverlay show={showCelebration} streakCount={streakCount} />
-      <div className="mx-auto max-w-md px-4 pb-8">
+      <main className="mx-auto max-w-md px-4 pb-8">
         {/* Header */}
         <motion.header
           className="flex items-center justify-between pt-6 pb-4"
@@ -207,7 +207,8 @@ const Index = () => {
             </TabsContent>
           </Tabs>
         </motion.div>
-      </div>
+      </main>
+
       <ExerciseAdvisor />
     </div>
   );
