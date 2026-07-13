@@ -3,11 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Target, ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PageMeta } from "@/components/PageMeta";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+
 
 type View = "login" | "register" | "forgot";
 
@@ -82,10 +85,29 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <PageMeta
+        title={
+          view === "forgot"
+            ? "Recuperar contraseña — Reto Diario"
+            : view === "register"
+            ? "Crear cuenta — Reto Diario"
+            : "Iniciar sesión — Reto Diario"
+        }
+        description={
+          view === "forgot"
+            ? "Restablece tu contraseña de Reto Diario con un enlace enviado a tu correo electrónico."
+            : view === "register"
+            ? "Crea tu cuenta gratuita en Reto Diario y empieza a rastrear tus retos diarios de ejercicio y hábitos."
+            : "Inicia sesión en Reto Diario para continuar con tus retos diarios, rachas y asistente de ejercicios."
+        }
+        path="/auth"
+      />
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
+      <main className="w-full max-w-sm">
       <AnimatePresence mode="wait">
+
         {view === "forgot" ? (
           <motion.div
             key="forgot"
