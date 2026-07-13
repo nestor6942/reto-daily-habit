@@ -23,6 +23,7 @@ export function ThemeToggle() {
       variant="ghost"
       onClick={() => setDark((d) => !d)}
       className="w-10 h-10"
+      aria-label={dark ? "Activar modo claro" : "Activar modo oscuro"}
     >
       {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
     </Button>
