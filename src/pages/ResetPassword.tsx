@@ -32,6 +32,14 @@ export default function ResetPassword() {
     }
   }, []);
 
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    return fallback;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -51,8 +59,8 @@ export default function ResetPassword() {
       if (error) throw error;
       toast.success("¡Contraseña actualizada correctamente!");
       navigate("/");
-    } catch (error: any) {
-      toast.error(error.message || "Error al actualizar la contraseña");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Error al actualizar la contraseña"));
     } finally {
       setLoading(false);
     }
@@ -115,4 +123,3 @@ export default function ResetPassword() {
     </div>
   );
 }
-
