@@ -51,8 +51,8 @@ export default function ResetPassword() {
       if (error) throw error;
       toast.success("¡Contraseña actualizada correctamente!");
       navigate("/");
-    } catch (error: any) {
-      toast.error(error.message || "Error al actualizar la contraseña");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al actualizar la contraseña");
     } finally {
       setLoading(false);
     }
