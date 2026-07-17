@@ -9,6 +9,8 @@ import { ArrowLeft, User, Save, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { PageMeta } from "@/components/PageMeta";
+
 
 const FITNESS_GOALS = [
   { value: "perder_peso", label: "🔥 Perder peso" },
@@ -120,7 +122,13 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageMeta
+        title="Mi perfil — Reto Diario"
+        description="Guarda tu peso, altura y objetivo fitness para recibir recomendaciones personalizadas del asistente de Reto Diario."
+        path="/profile"
+      />
       <div className="mx-auto max-w-md px-4 pb-8">
+
         {/* Header */}
         <motion.header
           className="flex items-center justify-between pt-6 pb-4"

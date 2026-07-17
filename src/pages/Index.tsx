@@ -15,6 +15,8 @@ import { Target, History, LogOut, UserCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ExerciseAdvisor } from "@/components/ExerciseAdvisor";
 import { useNavigate } from "react-router-dom";
+import { PageMeta } from "@/components/PageMeta";
+
 
 const Index = () => {
   const { signOut } = useAuth();
@@ -64,8 +66,13 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageMeta
+        title="Reto Diario — Seguimiento de ejercicio y hábitos"
+        description="Rastrea tus retos diarios de ejercicio y hábitos con rachas, celebraciones y un asistente de IA que personaliza rutinas."
+        path="/"
+      />
       <CelebrationOverlay show={showCelebration} streakCount={streakCount} />
-      <div className="mx-auto max-w-md px-4 pb-8">
+      <main className="mx-auto max-w-md px-4 pb-8">
         {/* Header */}
         <motion.header
           className="flex items-center justify-between pt-6 pb-4"
@@ -75,7 +82,7 @@ const Index = () => {
         >
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Reto Diario
+              Reto Diario — Seguimiento de ejercicio y metas
             </h1>
             <p className="text-sm text-muted-foreground">
               Supera tus metas cada día
@@ -88,6 +95,7 @@ const Index = () => {
               onClick={() => navigate("/profile")}
               className="w-10 h-10 text-muted-foreground"
               title="Mi perfil"
+              aria-label="Ir a mi perfil"
             >
               <UserCircle className="w-5 h-5" />
             </Button>
@@ -98,6 +106,7 @@ const Index = () => {
               onClick={signOut}
               className="w-10 h-10 text-muted-foreground"
               title="Cerrar sesión"
+              aria-label="Cerrar sesión"
             >
               <LogOut className="w-5 h-5" />
             </Button>
@@ -198,7 +207,8 @@ const Index = () => {
             </TabsContent>
           </Tabs>
         </motion.div>
-      </div>
+      </main>
+
       <ExerciseAdvisor />
     </div>
   );
