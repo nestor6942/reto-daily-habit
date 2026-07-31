@@ -97,6 +97,36 @@
         "outputSchema": null
       },
       {
+        "name": "complete_today",
+        "title": "Complete today's challenges",
+        "description": "Mark the signed-in user's challenges as completed for today: sets progress to the target, records the day in the history and updates the streak.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "challenge_ids": {
+              "description": "Optional ids of specific challenges to complete. Omit to complete all of them.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "date": {
+              "description": "Optional day in YYYY-MM-DD format. Defaults to today.",
+              "type": "string"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
         "name": "get_streak",
         "title": "Get streak",
         "description": "Get the signed-in user's current daily streak count and last completed date.",
