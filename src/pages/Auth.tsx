@@ -20,6 +20,13 @@ const pageVariants = {
   exit: { opacity: 0, y: -20 },
 };
 
+function nextTarget() {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//")
+    ? window.location.origin + next
+    : window.location.origin;
+}
+
 export default function Auth() {
   const [view, setView] = useState<View>("login");
   const [email, setEmail] = useState("");
@@ -31,7 +38,7 @@ export default function Auth() {
     setGoogleLoading(true);
     try {
       const { error } = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: nextTarget(),
       });
       if (error) throw error;
     } catch (error) {
@@ -53,7 +60,7 @@ export default function Auth() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: nextTarget() },
         });
         if (error) throw error;
         toast.success("¡Revisa tu correo para confirmar tu cuenta!");
