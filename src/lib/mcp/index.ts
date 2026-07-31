@@ -5,6 +5,7 @@ import updateChallengeProgressTool from "./tools/update-challenge-progress";
 import getStreakTool from "./tools/get-streak";
 import listHistoryTool from "./tools/list-history";
 import getProfileTool from "./tools/get-profile";
+import completeTodayTool from "./tools/complete-today";
 
 const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID ?? "project-ref-unset";
 
@@ -22,6 +23,7 @@ export default defineMcp({
     listChallengesTool,
     createChallengeTool,
     updateChallengeProgressTool,
+    completeTodayTool,
     getStreakTool,
     listHistoryTool,
     getProfileTool,
