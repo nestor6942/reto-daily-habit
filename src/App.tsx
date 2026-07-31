@@ -39,7 +39,11 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) {
+    const next = new URLSearchParams(window.location.search).get("next");
+    const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+    return <Navigate to={safeNext} replace />;
+  }
   return <>{children}</>;
 }
 
