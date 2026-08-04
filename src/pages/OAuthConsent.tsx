@@ -4,12 +4,34 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Target } from "lucide-react";
 
+type AuthorizationClient = {
+  name?: string | null;
+};
+
+type AuthorizationDetails = {
+  client?: AuthorizationClient | null;
+  redirect_url?: string | null;
+  redirect_to?: string | null;
+};
+
+type AuthorizationResult = {
+  data: AuthorizationDetails | null;
+  error: { message: string } | null;
+};
+
+type SupabaseOAuthApi = {
+  getAuthorizationDetails: (authorizationId: string) => Promise<AuthorizationResult>;
+  approveAuthorization: (authorizationId: string) => Promise<AuthorizationResult>;
+  denyAuthorization: (authorizationId: string) => Promise<AuthorizationResult>;
+};
+
 export default function OAuthConsent() {
   const [params] = useSearchParams();
   const authorizationId = params.get("authorization_id") ?? "";
-  const [details, setDetails] = useState<any>(null);
+  const [details, setDetails] = useState<AuthorizationDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const oauth = supabase.auth.oauth as unknown as SupabaseOAuthApi;
 
   useEffect(() => {
     let active = true;
@@ -21,9 +43,7 @@ export default function OAuthConsent() {
         window.location.href = "/auth?next=" + encodeURIComponent(next);
         return;
       }
-      const { data, error } = await (supabase.auth as any).oauth.getAuthorizationDetails(
-        authorizationId,
-      );
+      const { data, error } = await oauth.getAuthorizationDetails(authorizationId);
       if (!active) return;
       if (error) return setError(error.message);
       const immediate = data?.redirect_url ?? data?.redirect_to;
@@ -36,11 +56,10 @@ export default function OAuthConsent() {
     return () => {
       active = false;
     };
-  }, [authorizationId]);
+  }, [authorizationId, oauth]);
 
   async function decide(approve: boolean) {
     setBusy(true);
-    const oauth = (supabase.auth as any).oauth;
     const { data, error } = approve
       ? await oauth.approveAuthorization(authorizationId)
       : await oauth.denyAuthorization(authorizationId);
