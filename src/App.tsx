@@ -9,7 +9,6 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
-import OAuthConsent from "./pages/OAuthConsent";
 
 const queryClient = new QueryClient();
 
@@ -39,11 +38,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (user) {
-    const next = new URLSearchParams(window.location.search).get("next");
-    const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-    return <Navigate to={safeNext} replace />;
-  }
+  if (user) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -80,7 +75,6 @@ const App = () => (
               }
             />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
