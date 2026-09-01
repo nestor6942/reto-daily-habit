@@ -1,16 +1,26 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, Save, LogOut } from "lucide-react";
+import {
+  ArrowLeft,
+  User,
+  Save,
+  LogOut,
+  Download,
+  Upload,
+  Volume2,
+  Bell,
+  CheckCircle2,
+} from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { PageMeta } from "@/components/PageMeta";
-
+import { soundManager } from "@/lib/soundEffects";
+import { useAppData } from "@/hooks/useAppData";
 
 const FITNESS_GOALS = [
   { value: "perder_peso", label: "🔥 Perder peso" },
@@ -24,15 +34,36 @@ const FITNESS_GOALS = [
 export default function Profile() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { exportData, importData } = useAppData();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [displayName, setDisplayName] = useState("");
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [goal, setGoal] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
+  const [remindersEnabled, setRemindersEnabled] = useState(
+    typeof window !== "undefined" &&
+      localStorage.getItem("reto_reminders_enabled") === "true"
+  );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // Guest profile
+      const guestName = localStorage.getItem("reto_guest_name") || "Invitado";
+      const guestWeight = localStorage.getItem("reto_guest_weight") || "";
+      const guestHeight = localStorage.getItem("reto_guest_height") || "";
+      const guestGoal = localStorage.getItem("reto_guest_goal") || "";
+      setDisplayName(guestName === "Invitado" ? "" : guestName);
+      setWeight(guestWeight);
+      setHeight(guestHeight);
+      setGoal(guestGoal);
+      setLoading(false);
+      return;
+    }
+
     const load = async () => {
       const { data } = await supabase
         .from("profiles")
@@ -53,9 +84,7 @@ export default function Profile() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
 
-    // Validation
     const w = weight ? parseFloat(weight) : null;
     const h = height ? parseFloat(height) : null;
 
@@ -73,9 +102,9 @@ export default function Profile() {
     }
 
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .upsert({
+
+    if (user) {
+      const { error } = await supabase.from("profiles").upsert({
         id: user.id,
         display_name: displayName.trim() || null,
         weight_kg: w,
@@ -83,14 +112,80 @@ export default function Profile() {
         fitness_goal: goal || null,
       });
 
-    setSaving(false);
-
-    if (error) {
-      toast.error("Error al guardar el perfil");
-      return;
+      setSaving(false);
+      if (error) {
+        toast.error("Error al guardar el perfil");
+        return;
+      }
+    } else {
+      localStorage.setItem("reto_guest_name", displayName.trim() || "Invitado");
+      if (w) localStorage.setItem("reto_guest_weight", String(w));
+      if (h) localStorage.setItem("reto_guest_height", String(h));
+      if (goal) localStorage.setItem("reto_guest_goal", goal);
+      setSaving(false);
     }
-    toast.success("¡Perfil guardado!");
+
+    toast.success("¡Perfil guardado correctamente!");
+    soundManager.playPop();
     navigate("/");
+  };
+
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    soundManager.setEnabled(next);
+    setSoundEnabled(next);
+    toast.info(next ? "Efectos de sonido activados" : "Sonidos silenciados");
+  };
+
+  const toggleReminders = async () => {
+    if (!remindersEnabled) {
+      if ("Notification" in window) {
+        const perm = await Notification.requestPermission();
+        if (perm === "granted") {
+          setRemindersEnabled(true);
+          localStorage.setItem("reto_reminders_enabled", "true");
+          toast.success("¡Notificaciones de recordatorio activadas!");
+          return;
+        }
+      }
+      toast.warning("Permiso de notificaciones no concedido");
+    } else {
+      setRemindersEnabled(false);
+      localStorage.setItem("reto_reminders_enabled", "false");
+      toast.info("Recordatorios desactivados");
+    }
+  };
+
+  const handleExport = () => {
+    const jsonStr = exportData();
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reto-diario-backup-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("¡Copia de seguridad descargada!");
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        const ok = importData(content);
+        if (ok) {
+          toast.success("¡Datos restaurados con éxito!");
+          navigate("/");
+        } else {
+          toast.error("El archivo no tiene un formato válido");
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
   const bmi =
@@ -124,11 +219,10 @@ export default function Profile() {
     <div className="min-h-screen bg-background">
       <PageMeta
         title="Mi perfil — Reto Diario"
-        description="Guarda tu peso, altura y objetivo fitness para recibir recomendaciones personalizadas del asistente de Reto Diario."
+        description="Configura tu información física, objetivos fitness, sonidos y copias de seguridad de Reto Diario."
         path="/profile"
       />
-      <div className="mx-auto max-w-md px-4 pb-8">
-
+      <div className="mx-auto max-w-md px-4 pb-12">
         {/* Header */}
         <motion.header
           className="flex items-center justify-between pt-6 pb-4"
@@ -137,22 +231,24 @@ export default function Profile() {
         >
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
           >
             <ArrowLeft className="w-4 h-4" />
             Volver
           </button>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={signOut}
-              className="w-10 h-10 text-muted-foreground"
-              title="Cerrar sesión"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
+            {user && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={signOut}
+                className="w-10 h-10 text-muted-foreground hover:text-destructive"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-5 h-5" />
+              </Button>
+            )}
           </div>
         </motion.header>
 
@@ -163,27 +259,29 @@ export default function Profile() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-3 border border-primary/20">
             <User className="w-10 h-10 text-primary" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Mi Perfil
+            {displayName || (user ? "Mi Perfil" : "Usuario Invitado")}
           </h1>
-          <p className="text-sm text-muted-foreground">{user?.email}</p>
+          <p className="text-sm text-muted-foreground">
+            {user?.email || "Modo almacenamiento local"}
+          </p>
         </motion.div>
 
         {/* BMI Card */}
         {bmi && bmiCategory && (
           <motion.div
-            className="rounded-2xl border border-primary/20 bg-primary/5 p-4 mb-4 text-center"
+            className="rounded-2xl border border-primary/20 bg-primary/5 p-4 mb-4 text-center shadow-sm"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Tu IMC
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+              Tu Índice de Masa Corporal (IMC)
             </p>
-            <p className="text-3xl font-bold text-foreground">{bmi}</p>
-            <p className={`text-sm font-medium ${bmiCategory.color}`}>
+            <p className="text-3xl font-extrabold text-foreground">{bmi}</p>
+            <p className={`text-sm font-bold ${bmiCategory.color}`}>
               {bmiCategory.label}
             </p>
           </motion.div>
@@ -197,8 +295,8 @@ export default function Profile() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">
               Nombre
             </label>
             <Input
@@ -207,13 +305,13 @@ export default function Profile() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={50}
-              className="h-12"
+              className="h-11"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-foreground">
                 Peso (kg)
               </label>
               <Input
@@ -224,11 +322,11 @@ export default function Profile() {
                 min={20}
                 max={300}
                 step="0.1"
-                className="h-12"
+                className="h-11"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-foreground">
                 Altura (cm)
               </label>
               <Input
@@ -239,43 +337,136 @@ export default function Profile() {
                 min={100}
                 max={250}
                 step="0.1"
-                className="h-12"
+                className="h-11"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Objetivo de fitness
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">
+              Objetivo Principal
             </label>
             <div className="grid grid-cols-2 gap-2">
               {FITNESS_GOALS.map((g) => (
-                <motion.button
+                <button
                   key={g.value}
                   type="button"
-                  whileTap={{ scale: 0.95 }}
                   onClick={() => setGoal(goal === g.value ? "" : g.value)}
-                  className={`p-3 rounded-xl border text-sm font-medium text-left transition-all ${
+                  className={`p-3 rounded-xl border text-xs sm:text-sm font-semibold text-left transition-all ${
                     goal === g.value
-                      ? "border-primary bg-primary/10 text-primary"
+                      ? "border-primary bg-primary/10 text-primary shadow-sm"
                       : "border-border bg-background text-foreground hover:border-primary/50"
                   }`}
                 >
                   {g.label}
-                </motion.button>
+                </button>
               ))}
             </div>
           </div>
 
           <Button
             type="submit"
-            className="w-full h-12 bg-primary text-primary-foreground"
+            className="w-full h-12 bg-primary text-primary-foreground font-semibold"
             disabled={saving}
           >
             <Save className="w-4 h-4 mr-2" />
-            {saving ? "Guardando..." : "Guardar perfil"}
+            {saving ? "Guardando..." : "Guardar Perfil"}
           </Button>
         </motion.form>
+
+        {/* Preferences & Backup Settings */}
+        <div className="mt-8 space-y-3 pt-6 border-t">
+          <h3 className="text-sm font-bold text-foreground">
+            Preferencias de la Aplicación
+          </h3>
+
+          {/* Sound toggle card */}
+          <div className="flex items-center justify-between p-3.5 rounded-2xl border bg-card">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <Volume2 className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Efectos de Sonido
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Sonidos al sumar y completar retos
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant={soundEnabled ? "default" : "outline"}
+              size="sm"
+              onClick={toggleSound}
+              className="h-8 text-xs font-semibold"
+            >
+              {soundEnabled ? "Activado" : "Silencio"}
+            </Button>
+          </div>
+
+          {/* Reminders toggle */}
+          <div className="flex items-center justify-between p-3.5 rounded-2xl border bg-card">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-streak/10 flex items-center justify-center text-streak">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Recordatorios Diarios
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Notificaciones del navegador
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant={remindersEnabled ? "default" : "outline"}
+              size="sm"
+              onClick={toggleReminders}
+              className="h-8 text-xs font-semibold"
+            >
+              {remindersEnabled ? "Activado" : "Activar"}
+            </Button>
+          </div>
+
+          {/* Data Backup & Restore */}
+          <h3 className="text-sm font-bold text-foreground pt-3">
+            Copia de Seguridad y Datos
+          </h3>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleExport}
+              className="h-11 rounded-xl text-xs font-semibold gap-1.5"
+            >
+              <Download className="w-4 h-4" />
+              Exportar JSON
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="h-11 rounded-xl text-xs font-semibold gap-1.5"
+            >
+              <Upload className="w-4 h-4" />
+              Restaurar Copia
+            </Button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleImportFile}
+              className="hidden"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
