@@ -13,7 +13,9 @@ import {
   Upload,
   Volume2,
   Bell,
-  CheckCircle2,
+  Crown,
+  FileText,
+  Sparkles,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
@@ -21,6 +23,9 @@ import { motion } from "framer-motion";
 import { PageMeta } from "@/components/PageMeta";
 import { soundManager } from "@/lib/soundEffects";
 import { useAppData } from "@/hooks/useAppData";
+import { subscriptionManager } from "@/lib/subscription";
+import { PricingModal } from "@/components/PricingModal";
+import { ProgressReportModal } from "@/components/ProgressReportModal";
 
 const FITNESS_GOALS = [
   { value: "perder_peso", label: "🔥 Perder peso" },
@@ -34,7 +39,8 @@ const FITNESS_GOALS = [
 export default function Profile() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { exportData, importData } = useAppData();
+  const { challenges, history, streakCount, bestStreak, exportData, importData } =
+    useAppData();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState("");
@@ -44,6 +50,10 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [subscription, setSubscription] = useState(subscriptionManager.getSubscription());
+
   const [remindersEnabled, setRemindersEnabled] = useState(
     typeof window !== "undefined" &&
       localStorage.getItem("reto_reminders_enabled") === "true"
@@ -219,10 +229,10 @@ export default function Profile() {
     <div className="min-h-screen bg-background">
       <PageMeta
         title="Mi perfil — Reto Diario"
-        description="Configura tu información física, objetivos fitness, sonidos y copias de seguridad de Reto Diario."
+        description="Configura tu información física, membresía PRO, sonidos y copias de seguridad de Reto Diario."
         path="/profile"
       />
-      <div className="mx-auto max-w-md px-4 pb-12">
+      <div className="mx-auto max-w-md px-4 pb-16">
         {/* Header */}
         <motion.header
           className="flex items-center justify-between pt-6 pb-4"
@@ -254,7 +264,7 @@ export default function Profile() {
 
         {/* Avatar */}
         <motion.div
-          className="flex flex-col items-center mb-6"
+          className="flex flex-col items-center mb-5"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -268,6 +278,36 @@ export default function Profile() {
           <p className="text-sm text-muted-foreground">
             {user?.email || "Modo almacenamiento local"}
           </p>
+        </motion.div>
+
+        {/* Subscription Membership Card */}
+        <motion.div
+          className="rounded-2xl border bg-gradient-to-tr from-amber-500/10 via-card to-streak/10 p-4 mb-4 shadow-sm"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center border border-amber-500/30">
+                <Crown className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                  Membresía
+                </span>
+                <p className="font-extrabold text-sm text-foreground">
+                  {subscription.planName}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setPricingOpen(true)}
+              className="h-8 text-xs font-bold bg-amber-500 text-white rounded-xl shadow-sm hover:bg-amber-600"
+            >
+              {subscription.isPro ? "Gestionar" : "Mejorar a PRO"}
+            </Button>
+          </div>
         </motion.div>
 
         {/* BMI Card */}
@@ -374,8 +414,25 @@ export default function Profile() {
           </Button>
         </motion.form>
 
-        {/* Preferences & Backup Settings */}
+        {/* Coach / Trainer Report Export */}
         <div className="mt-8 space-y-3 pt-6 border-t">
+          <h3 className="text-sm font-bold text-foreground">
+            Herramientas Profesionales
+          </h3>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setReportOpen(true)}
+            className="w-full h-12 rounded-2xl text-xs font-bold border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary gap-2 justify-start px-4 shadow-sm"
+          >
+            <FileText className="w-4 h-4 text-primary" />
+            <span>Generar Ficha de Rendimiento (Imprimir / PDF)</span>
+          </Button>
+        </div>
+
+        {/* Preferences & Backup Settings */}
+        <div className="mt-6 space-y-3 pt-4 border-t">
           <h3 className="text-sm font-bold text-foreground">
             Preferencias de la Aplicación
           </h3>
@@ -468,6 +525,30 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* Pricing Modal */}
+      <PricingModal
+        open={pricingOpen}
+        onOpenChange={setPricingOpen}
+        onSubscriptionChange={() =>
+          setSubscription(subscriptionManager.getSubscription())
+        }
+      />
+
+      {/* Progress Report Modal */}
+      <ProgressReportModal
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        challenges={challenges}
+        history={history}
+        streakCount={streakCount}
+        bestStreak={bestStreak}
+        userName={displayName || "Atleta de Reto Diario"}
+        userEmail={user?.email || "Modo local"}
+        weight={weight}
+        height={height}
+        goal={goal}
+      />
     </div>
   );
 }
