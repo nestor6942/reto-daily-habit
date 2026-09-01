@@ -13,6 +13,14 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
+  esbuild: {
+    target: "esnext",
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: "esnext",
+    },
+  },
   build: {
     target: "esnext",
   },
