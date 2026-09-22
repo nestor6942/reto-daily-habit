@@ -14,6 +14,9 @@ import {
   Sparkles,
   ShieldCheck,
   Tag,
+  Lock,
+  CreditCard,
+  ExternalLink,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -56,6 +59,7 @@ export function PricingModal({
       return;
     }
 
+    // Opens the user's real Stripe Payment Link
     window.open(url, "_blank");
   };
 
@@ -78,18 +82,25 @@ export function PricingModal({
     }
   };
 
+  const planPriceLabel =
+    selectedPlan === "annual"
+      ? "$29.99 USD / año"
+      : selectedPlan === "monthly"
+      ? "$3.99 USD / mes"
+      : "$49.99 USD de por vida";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg rounded-3xl p-5 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg rounded-3xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
         <DialogHeader className="text-center sm:text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-streak/20 flex items-center justify-center text-amber-500 mb-2 border border-amber-500/30">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-streak/20 flex items-center justify-center text-amber-500 mb-2 border border-amber-500/30 shadow-sm">
             <Crown className="w-8 h-8" />
           </div>
           <DialogTitle className="text-2xl font-black text-foreground">
             Desbloquea Reto Diario PRO
           </DialogTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Supera tus límites con hábitos ilimitados, programas guiados y asistencia de IA sin restricciones.
+          <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+            Supera tus límites con hábitos ilimitados, programas guiados de 21 días y asesoría de IA sin restricciones.
           </p>
         </DialogHeader>
 
@@ -101,7 +112,7 @@ export function PricingModal({
             onClick={() => setSelectedPlan("monthly")}
             className={`p-3 rounded-2xl border text-center transition-all relative ${
               selectedPlan === "monthly"
-                ? "border-primary bg-primary/10 shadow-sm"
+                ? "border-primary bg-primary/10 shadow-sm ring-2 ring-primary"
                 : "border-border bg-card hover:border-primary/40"
             }`}
           >
@@ -109,7 +120,7 @@ export function PricingModal({
               Mensual
             </span>
             <p className="text-lg font-black text-foreground mt-1">$3.99</p>
-            <span className="text-[10px] text-muted-foreground">/mes</span>
+            <span className="text-[10px] text-muted-foreground">USD / mes</span>
           </button>
 
           {/* Annual (Best value) */}
@@ -138,7 +149,7 @@ export function PricingModal({
             onClick={() => setSelectedPlan("lifetime")}
             className={`p-3 rounded-2xl border text-center transition-all relative ${
               selectedPlan === "lifetime"
-                ? "border-amber-500 bg-amber-500/10 shadow-sm ring-1 ring-amber-500"
+                ? "border-amber-500 bg-amber-500/10 shadow-sm ring-2 ring-amber-500"
                 : "border-border bg-card hover:border-amber-500/40"
             }`}
           >
@@ -151,7 +162,7 @@ export function PricingModal({
         </div>
 
         {/* Benefits Checklist */}
-        <div className="rounded-2xl bg-muted/60 p-4 space-y-2.5 my-2 text-xs">
+        <div className="rounded-2xl bg-muted/60 p-4 space-y-2.5 my-2 text-xs border">
           <h4 className="font-bold text-foreground flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-amber-500" />
             Beneficios incluidos en tu membresía PRO:
@@ -167,53 +178,65 @@ export function PricingModal({
               <div className="w-4 h-4 rounded-full bg-success/20 text-success flex items-center justify-center shrink-0">
                 <Check className="w-3 h-3 stroke-[3]" />
               </div>
-              <span><strong className="text-foreground">Programas Guiados de 21 y 30 Días</strong> listos para usar.</span>
+              <span><strong className="text-foreground">Programas Guiados de 21 y 30 Días</strong> con rutinas preparadas.</span>
             </li>
             <li className="flex items-center gap-2">
               <div className="w-4 h-4 rounded-full bg-success/20 text-success flex items-center justify-center shrink-0">
                 <Check className="w-3 h-3 stroke-[3]" />
               </div>
-              <span><strong className="text-foreground">Asistente de IA Ilimitado</strong> con rutinas personalizadas.</span>
+              <span><strong className="text-foreground">Asistente de IA Ilimitado</strong> con rutinas a tu medida física.</span>
             </li>
             <li className="flex items-center gap-2">
               <div className="w-4 h-4 rounded-full bg-success/20 text-success flex items-center justify-center shrink-0">
                 <Check className="w-3 h-3 stroke-[3]" />
               </div>
-              <span><strong className="text-foreground">Informes de Progreso</strong> para compartir con tu entrenador.</span>
+              <span><strong className="text-foreground">Ficha de Rendimiento PDF</strong> para imprimir o enviar a tu coach.</span>
             </li>
             <li className="flex items-center gap-2">
               <div className="w-4 h-4 rounded-full bg-success/20 text-success flex items-center justify-center shrink-0">
                 <Check className="w-3 h-3 stroke-[3]" />
               </div>
-              <span><strong className="text-foreground">Insignia Dorada Titán</strong> en tu perfil.</span>
+              <span><strong className="text-foreground">Insignia Dorada PRO</strong> y respaldo prioritario en la nube.</span>
             </li>
           </ul>
         </div>
 
-        {/* CTA Button */}
-        <Button
-          onClick={handleCheckout}
-          className="w-full h-12 bg-gradient-to-r from-primary to-emerald-600 text-primary-foreground font-extrabold text-sm rounded-2xl shadow-lg shadow-primary/20 hover:opacity-95 gap-2"
-        >
-          <Zap className="w-4 h-4 fill-primary-foreground" />
-          Obtener Acceso PRO Ahora
-        </Button>
+        {/* CTA Button: Pagar con Stripe */}
+        <div className="space-y-2 pt-1">
+          <Button
+            onClick={handleCheckout}
+            className="w-full h-12 bg-gradient-to-r from-primary to-emerald-600 hover:from-primary/95 hover:to-emerald-700 text-primary-foreground font-extrabold text-sm rounded-2xl shadow-lg shadow-primary/20 gap-2"
+          >
+            <Lock className="w-4 h-4" />
+            <span>Pagar {planPriceLabel} con Stripe</span>
+            <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+          </Button>
 
-        {/* Guarantee */}
-        <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-success" />
-          Cancela en cualquier momento con 1 clic sin compromisos.
-        </p>
+          {/* Stripe Trust & Payment Methods */}
+          <div className="flex flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground pt-1">
+            <div className="flex items-center gap-2 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-success" />
+              <span>Pago 100% seguro y cifrado con <strong>Stripe</strong></span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
+              <span>Acepta Tarjeta (Débito/Crédito)</span>
+              <span>•</span>
+              <span>Apple Pay</span>
+              <span>•</span>
+              <span>Google Pay</span>
+            </div>
+          </div>
+        </div>
 
         {/* Promo Code Form */}
-        <form onSubmit={handleRedeemCode} className="pt-2 border-t flex gap-2">
+        <form onSubmit={handleRedeemCode} className="pt-3 border-t flex gap-2">
           <div className="relative flex-1">
             <Tag className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
               placeholder="¿Tienes un cupón? (ej: TITAN)"
-              className="h-10 text-xs pl-8 uppercase"
+              className="h-10 text-xs pl-8 uppercase rounded-xl"
             />
           </div>
           <Button
@@ -221,7 +244,7 @@ export function PricingModal({
             variant="outline"
             size="sm"
             disabled={promoLoading || !promoCode.trim()}
-            className="h-10 text-xs font-semibold"
+            className="h-10 text-xs font-bold rounded-xl"
           >
             Canjear
           </Button>
