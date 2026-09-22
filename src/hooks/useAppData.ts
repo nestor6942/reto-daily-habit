@@ -27,7 +27,7 @@ export const daysBetweenDates = (dateA: string, dateB: string): number => {
   return Math.abs(Math.round((db - da) / (1000 * 60 * 60 * 24)));
 };
 
-const DEFAULT_GUEST_CHALLENGES: Challenge[] = [
+export const DEFAULT_GUEST_CHALLENGES: Challenge[] = [
   {
     id: "default-1",
     name: "Flexiones de brazos",
@@ -62,8 +62,16 @@ const DEFAULT_GUEST_CHALLENGES: Challenge[] = [
   },
 ];
 
+export type SyncStatus = "synced" | "syncing" | "offline";
+
+interface ChallengeMeta {
+  unit?: string;
+  category?: HabitCategory;
+  icon?: string;
+}
+
 export function useAppData() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [history, setHistory] = useState<DailyRecord[]>([]);
   const [streakCount, setStreakCount] = useState(0);
@@ -71,11 +79,42 @@ export function useAppData() {
   const [lastCompletedDate, setLastCompletedDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [streakFreezeAvailable, setStreakFreezeAvailable] = useState(true);
 
-  // Load and sync data
+  // Helper to get challenge metadata map from storage
+  const getMetaMap = useCallback((userId?: string): Record<string, ChallengeMeta> => {
+    const key = userId ? `reto_meta_${userId}` : "reto_guest_meta";
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const saveMetaMap = useCallback(
+    (map: Record<string, ChallengeMeta>, userId?: string) => {
+      const key = userId ? `reto_meta_${userId}` : "reto_guest_meta";
+      localStorage.setItem(key, JSON.stringify(map));
+    },
+    []
+  );
+
+  // Check if streak freeze was used this month
+  const checkStreakFreezeStatus = useCallback(() => {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const usedMonth = localStorage.getItem("reto_streak_freeze_month");
+    setStreakFreezeAvailable(usedMonth !== currentMonth);
+  }, []);
+
+  // Main data loader and sync
   useEffect(() => {
+    let isMounted = true;
+    checkStreakFreezeStatus();
+
     const load = async () => {
-      setLoading(true);
       const today = getLocalDateStr();
       const lastActiveDate = localStorage.getItem("reto_last_active_date");
       const isNewDay = lastActiveDate !== today;
@@ -83,6 +122,38 @@ export function useAppData() {
 
       if (user) {
         setIsGuest(false);
+        setSyncStatus("syncing");
+
+        // 1. Instant hydration from offline cache if available
+        const cacheKey = `reto_cache_${user.id}`;
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          try {
+            const cached = JSON.parse(cachedRaw);
+            if (cached.challenges && Array.isArray(cached.challenges)) {
+              const hydrated = isNewDay
+                ? cached.challenges.map((c: Challenge) => ({ ...c, currentValue: 0 }))
+                : cached.challenges;
+              setChallenges(hydrated);
+            }
+            if (cached.history && Array.isArray(cached.history)) {
+              setHistory(cached.history);
+            }
+            if (typeof cached.streakCount === "number") {
+              setStreakCount(cached.streakCount);
+            }
+            if (typeof cached.bestStreak === "number") {
+              setBestStreak(cached.bestStreak);
+            }
+            if (cached.lastCompletedDate) {
+              setLastCompletedDate(cached.lastCompletedDate);
+            }
+          } catch (e) {
+            console.warn("Failed to parse local cache:", e);
+          }
+        }
+
+        // 2. Fetch live data from Supabase with resilient migration & fallback
         try {
           const [challengesRes, historyRes, streakRes] = await Promise.all([
             supabase
@@ -95,7 +166,7 @@ export function useAppData() {
               .select("*")
               .eq("user_id", user.id)
               .order("date", { ascending: false })
-              .limit(90),
+              .limit(120),
             supabase
               .from("user_streaks")
               .select("*")
@@ -103,69 +174,192 @@ export function useAppData() {
               .maybeSingle(),
           ]);
 
-          let loadedChallenges: Challenge[] = [];
-          if (challengesRes.data) {
-            loadedChallenges = challengesRes.data.map((c) => ({
+          let remoteChallenges = challengesRes.data || [];
+          const metaMap = getMetaMap(user.id);
+
+          // If user has NO challenges in Supabase, check for guest data to migrate, or auto-provision starter habits
+          if (remoteChallenges.length === 0) {
+            const storedGuestChallenges = localStorage.getItem("reto_guest_challenges");
+            const guestChallenges: Challenge[] = storedGuestChallenges
+              ? JSON.parse(storedGuestChallenges)
+              : DEFAULT_GUEST_CHALLENGES;
+
+            const guestMeta = getMetaMap();
+
+            // Insert into Supabase so newly registered user never has empty data
+            const inserts = guestChallenges.map((gc) => ({
+              user_id: user.id,
+              name: gc.name,
+              target_value: gc.targetValue,
+              current_value: isNewDay ? 0 : gc.currentValue,
+            }));
+
+            const { data: insertedData, error: insertErr } = await supabase
+              .from("challenges")
+              .insert(inserts)
+              .select();
+
+            if (!insertErr && insertedData) {
+              remoteChallenges = insertedData;
+              // Migrate metadata
+              insertedData.forEach((row, idx) => {
+                const original = guestChallenges[idx];
+                metaMap[row.id] = {
+                  unit: original?.unit || guestMeta[original?.id]?.unit || "reps",
+                  category: original?.category || guestMeta[original?.id]?.category || "fuerza",
+                };
+              });
+              saveMetaMap(metaMap, user.id);
+            }
+
+            // Migrate guest history if present
+            const storedGuestHistory = localStorage.getItem("reto_guest_history");
+            if (storedGuestHistory) {
+              try {
+                const parsedHistory: DailyRecord[] = JSON.parse(storedGuestHistory);
+                if (parsedHistory.length > 0) {
+                  const historyInserts = parsedHistory.map((h) => ({
+                    user_id: user.id,
+                    date: h.date,
+                    challenges_completed: h.challengesCompleted,
+                    total_challenges: h.totalChallenges,
+                    all_completed: h.allCompleted,
+                  }));
+                  await supabase.from("daily_records").upsert(historyInserts, { onConflict: "user_id,date" });
+                }
+              } catch (err) {
+                console.warn("Could not migrate guest history:", err);
+              }
+            }
+
+            // Migrate guest streak if present
+            const storedGuestStreak = parseInt(localStorage.getItem("reto_guest_streak") || "0", 10);
+            const storedGuestLastDate = localStorage.getItem("reto_guest_last_date");
+            if (storedGuestStreak > 0 && storedGuestLastDate) {
+              await supabase.from("user_streaks").upsert(
+                {
+                  user_id: user.id,
+                  streak_count: storedGuestStreak,
+                  last_completed_date: storedGuestLastDate,
+                },
+                { onConflict: "user_id" }
+              );
+            }
+
+            // Clear guest-specific keys after successful account migration
+            localStorage.removeItem("reto_guest_challenges");
+            localStorage.removeItem("reto_guest_history");
+            localStorage.removeItem("reto_guest_streak");
+            localStorage.removeItem("reto_guest_last_date");
+          }
+
+          if (!isMounted) return;
+
+          // Format loaded challenges with persistent metadata
+          const loadedChallenges: Challenge[] = remoteChallenges.map((c) => {
+            const meta = metaMap[c.id];
+            const lowerName = c.name.toLowerCase();
+            let defCategory: HabitCategory = "fuerza";
+            let defUnit = "reps";
+
+            if (lowerName.includes("agua") || lowerName.includes("comer") || lowerName.includes("fruta")) {
+              defCategory = "nutricion";
+              defUnit = "vasos";
+            } else if (lowerName.includes("cardio") || lowerName.includes("caminar") || lowerName.includes("correr") || lowerName.includes("bici")) {
+              defCategory = "cardio";
+              defUnit = "min";
+            } else if (lowerName.includes("yoga") || lowerName.includes("estiramiento")) {
+              defCategory = "flexibilidad";
+              defUnit = "min";
+            } else if (lowerName.includes("meditar") || lowerName.includes("leer") || lowerName.includes("dormir")) {
+              defCategory = "mente";
+              defUnit = lowerName.includes("leer") ? "páginas" : "min";
+            }
+
+            return {
               id: c.id,
               name: c.name,
               targetValue: c.target_value,
               currentValue: isNewDay ? 0 : c.current_value,
-              unit: "reps",
-              category: "fuerza",
+              unit: meta?.unit || defUnit,
+              category: meta?.category || defCategory,
+              icon: meta?.icon,
               lastUpdatedDate: today,
-            }));
+            };
+          });
 
-            // If it's a new day, reset DB current_value to 0
-            if (isNewDay && challengesRes.data.length > 0) {
-              await supabase
-                .from("challenges")
-                .update({ current_value: 0 })
-                .eq("user_id", user.id);
-            }
+          // Reset remote DB current_value if new day
+          if (isNewDay && remoteChallenges.length > 0) {
+            await supabase
+              .from("challenges")
+              .update({ current_value: 0 })
+              .eq("user_id", user.id);
           }
+
           setChallenges(loadedChallenges);
 
+          // Process history
+          let loadedHistory: DailyRecord[] = [];
           if (historyRes.data) {
-            setHistory(
-              historyRes.data.map((r) => ({
-                date: r.date,
-                challengesCompleted: r.challenges_completed || [],
-                totalChallenges: r.total_challenges,
-                allCompleted: r.all_completed,
-              }))
-            );
+            loadedHistory = historyRes.data.map((r) => ({
+              date: r.date,
+              challengesCompleted: r.challenges_completed || [],
+              totalChallenges: r.total_challenges,
+              allCompleted: r.all_completed,
+            }));
+            setHistory(loadedHistory);
           }
 
+          // Process streak
+          let currentStreakCount = 0;
+          let currentBestStreak = 0;
+          let remoteLastDate: string | null = null;
+
           if (streakRes.data) {
-            const lastDate = streakRes.data.last_completed_date;
-            setLastCompletedDate(lastDate);
+            remoteLastDate = streakRes.data.last_completed_date;
+            setLastCompletedDate(remoteLastDate);
             const recordedCount = streakRes.data.streak_count || 0;
 
-            // Check if streak is still active (completed today or yesterday)
-            if (lastDate) {
-              const diff = daysBetweenDates(lastDate, today);
+            if (remoteLastDate) {
+              const diff = daysBetweenDates(remoteLastDate, today);
               if (diff <= 1) {
-                setStreakCount(recordedCount);
+                currentStreakCount = recordedCount;
               } else {
-                // Streak broken
-                setStreakCount(0);
+                currentStreakCount = 0;
               }
-            } else {
-              setStreakCount(0);
             }
-
             const storedBest = parseInt(
               localStorage.getItem(`reto_best_streak_${user.id}`) || "0",
               10
             );
-            setBestStreak(Math.max(storedBest, recordedCount));
+            currentBestStreak = Math.max(storedBest, recordedCount);
+            setStreakCount(currentStreakCount);
+            setBestStreak(currentBestStreak);
           }
+
+          // Save mirrored local cache for offline reliability
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              challenges: loadedChallenges,
+              history: loadedHistory,
+              streakCount: currentStreakCount,
+              bestStreak: currentBestStreak,
+              lastCompletedDate: remoteLastDate,
+              savedAt: new Date().toISOString(),
+            })
+          );
+
+          setSyncStatus("synced");
+          setLastSyncedAt(new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }));
         } catch (e) {
-          console.error("Error loading user data:", e);
+          console.error("Error connecting to Supabase cloud:", e);
+          setSyncStatus("offline");
         }
       } else {
-        // Guest mode - LocalStorage
+        // Guest mode (offline/localStorage)
         setIsGuest(true);
+        setSyncStatus("synced");
         const storedChallenges = localStorage.getItem("reto_guest_challenges");
         let initialChallenges: Challenge[] = storedChallenges
           ? JSON.parse(storedChallenges)
@@ -176,28 +370,17 @@ export function useAppData() {
             ...c,
             currentValue: 0,
           }));
-          localStorage.setItem(
-            "reto_guest_challenges",
-            JSON.stringify(initialChallenges)
-          );
+          localStorage.setItem("reto_guest_challenges", JSON.stringify(initialChallenges));
         }
         setChallenges(initialChallenges);
 
         const storedHistory = localStorage.getItem("reto_guest_history");
-        const loadedHistory: DailyRecord[] = storedHistory
-          ? JSON.parse(storedHistory)
-          : [];
+        const loadedHistory: DailyRecord[] = storedHistory ? JSON.parse(storedHistory) : [];
         setHistory(loadedHistory);
 
         const storedLastDate = localStorage.getItem("reto_guest_last_date");
-        const storedStreak = parseInt(
-          localStorage.getItem("reto_guest_streak") || "0",
-          10
-        );
-        const storedBest = parseInt(
-          localStorage.getItem("reto_guest_best_streak") || "0",
-          10
-        );
+        const storedStreak = parseInt(localStorage.getItem("reto_guest_streak") || "0", 10);
+        const storedBest = parseInt(localStorage.getItem("reto_guest_best_streak") || "0", 10);
 
         setLastCompletedDate(storedLastDate);
         if (storedLastDate) {
@@ -211,18 +394,47 @@ export function useAppData() {
           setStreakCount(0);
         }
         setBestStreak(Math.max(storedBest, storedStreak));
+        setLastSyncedAt(new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }));
       }
 
-      setLoading(false);
+      if (isMounted) setLoading(false);
     };
 
     load();
-  }, [user]);
 
-  // Helper to persist guest challenges
-  const saveGuestChallenges = (updated: Challenge[]) => {
-    localStorage.setItem("reto_guest_challenges", JSON.stringify(updated));
-  };
+    return () => {
+      isMounted = false;
+    };
+  }, [user, checkStreakFreezeStatus, getMetaMap, saveMetaMap]);
+
+  // Helper to persist mirror cache
+  const updateOfflineCache = useCallback(
+    (
+      updatedChallenges: Challenge[],
+      updatedHistory?: DailyRecord[],
+      streak?: number,
+      best?: number,
+      lastDate?: string | null
+    ) => {
+      if (user) {
+        const cacheKey = `reto_cache_${user.id}`;
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            challenges: updatedChallenges,
+            history: updatedHistory !== undefined ? updatedHistory : history,
+            streakCount: streak !== undefined ? streak : streakCount,
+            bestStreak: best !== undefined ? best : bestStreak,
+            lastCompletedDate: lastDate !== undefined ? lastDate : lastCompletedDate,
+            savedAt: new Date().toISOString(),
+          })
+        );
+      } else {
+        localStorage.setItem("reto_guest_challenges", JSON.stringify(updatedChallenges));
+      }
+    },
+    [user, history, streakCount, bestStreak, lastCompletedDate]
+  );
 
   // Add challenge
   const addChallenge = useCallback(
@@ -233,8 +445,9 @@ export function useAppData() {
       category: HabitCategory = "general"
     ) => {
       const today = getLocalDateStr();
+      const tempId = "ch-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const newChallenge: Challenge = {
-        id: "ch-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+        id: tempId,
         name,
         targetValue,
         currentValue: 0,
@@ -244,6 +457,7 @@ export function useAppData() {
       };
 
       if (user) {
+        setSyncStatus("syncing");
         try {
           const { data, error } = await supabase
             .from("challenges")
@@ -257,31 +471,47 @@ export function useAppData() {
             .single();
 
           if (data && !error) {
-            setChallenges((prev) => [
-              ...prev,
-              {
-                id: data.id,
-                name: data.name,
-                targetValue: data.target_value,
-                currentValue: data.current_value,
-                unit,
-                category,
-              },
-            ]);
+            const finalChallenge: Challenge = {
+              id: data.id,
+              name: data.name,
+              targetValue: data.target_value,
+              currentValue: data.current_value,
+              unit,
+              category,
+            };
+
+            // Save persistent metadata
+            const metaMap = getMetaMap(user.id);
+            metaMap[data.id] = { unit, category };
+            saveMetaMap(metaMap, user.id);
+
+            setChallenges((prev) => {
+              const updated = [...prev, finalChallenge];
+              updateOfflineCache(updated);
+              return updated;
+            });
+            setSyncStatus("synced");
+            setLastSyncedAt(new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }));
           }
         } catch (e) {
-          console.error("Error adding challenge:", e);
+          console.error("Error adding challenge to cloud:", e);
+          setSyncStatus("offline");
+          setChallenges((prev) => {
+            const updated = [...prev, newChallenge];
+            updateOfflineCache(updated);
+            return updated;
+          });
         }
       } else {
         setChallenges((prev) => {
-          const next = [...prev, newChallenge];
-          saveGuestChallenges(next);
-          return next;
+          const updated = [...prev, newChallenge];
+          updateOfflineCache(updated);
+          return updated;
         });
       }
       soundManager.playPop();
     },
-    [user]
+    [user, getMetaMap, saveMetaMap, updateOfflineCache]
   );
 
   // Update existing challenge
@@ -297,26 +527,42 @@ export function useAppData() {
     ) => {
       setChallenges((prev) => {
         const next = prev.map((c) => (c.id === id ? { ...c, ...updates } : c));
-        if (!user) saveGuestChallenges(next);
+        updateOfflineCache(next);
         return next;
       });
 
       if (user) {
+        setSyncStatus("syncing");
         try {
-          await supabase
-            .from("challenges")
-            .update({
-              ...(updates.name ? { name: updates.name } : {}),
-              ...(updates.targetValue ? { target_value: updates.targetValue } : {}),
-            })
-            .eq("id", id)
-            .eq("user_id", user.id);
+          if (updates.unit || updates.category) {
+            const metaMap = getMetaMap(user.id);
+            metaMap[id] = {
+              ...metaMap[id],
+              ...(updates.unit ? { unit: updates.unit } : {}),
+              ...(updates.category ? { category: updates.category } : {}),
+            };
+            saveMetaMap(metaMap, user.id);
+          }
+
+          if (updates.name || updates.targetValue) {
+            await supabase
+              .from("challenges")
+              .update({
+                ...(updates.name ? { name: updates.name } : {}),
+                ...(updates.targetValue ? { target_value: updates.targetValue } : {}),
+              })
+              .eq("id", id)
+              .eq("user_id", user.id);
+          }
+          setSyncStatus("synced");
+          setLastSyncedAt(new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }));
         } catch (e) {
           console.error("Error updating challenge:", e);
+          setSyncStatus("offline");
         }
       }
     },
-    [user]
+    [user, getMetaMap, saveMetaMap, updateOfflineCache]
   );
 
   // Check and process day completion
@@ -361,14 +607,20 @@ export function useAppData() {
         allCompleted: true,
       };
 
-      setHistory((prev) => [
-        newRecord,
-        ...prev.filter((h) => h.date !== today),
-      ]);
+      const updatedHistory = [newRecord, ...history.filter((h) => h.date !== today)];
+      setHistory(updatedHistory);
+
+      updateOfflineCache(
+        updatedChallenges,
+        updatedHistory,
+        newStreak,
+        updatedBest,
+        today
+      );
 
       if (user) {
+        setSyncStatus("syncing");
         try {
-          // Save daily record
           await supabase.from("daily_records").upsert(
             {
               user_id: user.id,
@@ -380,7 +632,6 @@ export function useAppData() {
             { onConflict: "user_id,date" }
           );
 
-          // Save streak
           await supabase.from("user_streaks").upsert(
             {
               user_id: user.id,
@@ -391,22 +642,20 @@ export function useAppData() {
           );
 
           localStorage.setItem(`reto_best_streak_${user.id}`, String(updatedBest));
+          setSyncStatus("synced");
+          setLastSyncedAt(new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }));
         } catch (e) {
-          console.error("Error saving record to Supabase:", e);
+          console.error("Error saving record to cloud:", e);
+          setSyncStatus("offline");
         }
       } else {
-        // Save guest state
-        const updatedHistory = [
-          newRecord,
-          ...history.filter((h) => h.date !== today),
-        ];
         localStorage.setItem("reto_guest_history", JSON.stringify(updatedHistory));
         localStorage.setItem("reto_guest_streak", String(newStreak));
         localStorage.setItem("reto_guest_best_streak", String(updatedBest));
         localStorage.setItem("reto_guest_last_date", today);
       }
     },
-    [user, history, lastCompletedDate, streakCount, bestStreak]
+    [user, history, lastCompletedDate, streakCount, bestStreak, updateOfflineCache]
   );
 
   // Increment progress
@@ -435,10 +684,9 @@ export function useAppData() {
         c.id === id ? { ...c, currentValue: newValue } : c
       );
       setChallenges(updated);
+      updateOfflineCache(updated);
 
-      if (!user) {
-        saveGuestChallenges(updated);
-      } else {
+      if (user) {
         try {
           await supabase
             .from("challenges")
@@ -446,13 +694,13 @@ export function useAppData() {
             .eq("id", id)
             .eq("user_id", user.id);
         } catch (e) {
-          console.error("Error updating progress:", e);
+          console.warn("Cloud update pending:", e);
         }
       }
 
       await checkCompletionAndStreak(updated);
     },
-    [user, challenges, checkCompletionAndStreak]
+    [user, challenges, checkCompletionAndStreak, updateOfflineCache]
   );
 
   // Decrement progress
@@ -468,10 +716,9 @@ export function useAppData() {
         c.id === id ? { ...c, currentValue: newValue } : c
       );
       setChallenges(updated);
+      updateOfflineCache(updated);
 
-      if (!user) {
-        saveGuestChallenges(updated);
-      } else {
+      if (user) {
         try {
           await supabase
             .from("challenges")
@@ -479,14 +726,14 @@ export function useAppData() {
             .eq("id", id)
             .eq("user_id", user.id);
         } catch (e) {
-          console.error("Error decrementing progress:", e);
+          console.warn("Cloud update pending:", e);
         }
       }
     },
-    [user, challenges]
+    [user, challenges, updateOfflineCache]
   );
 
-  // Quick toggle completed
+  // Toggle complete
   const toggleComplete = useCallback(
     async (id: string) => {
       const challenge = challenges.find((c) => c.id === id);
@@ -505,10 +752,9 @@ export function useAppData() {
         c.id === id ? { ...c, currentValue: newValue } : c
       );
       setChallenges(updated);
+      updateOfflineCache(updated);
 
-      if (!user) {
-        saveGuestChallenges(updated);
-      } else {
+      if (user) {
         try {
           await supabase
             .from("challenges")
@@ -516,7 +762,7 @@ export function useAppData() {
             .eq("id", id)
             .eq("user_id", user.id);
         } catch (e) {
-          console.error("Error toggling completion:", e);
+          console.warn("Cloud update pending:", e);
         }
       }
 
@@ -524,21 +770,20 @@ export function useAppData() {
         await checkCompletionAndStreak(updated);
       }
     },
-    [user, challenges, checkCompletionAndStreak]
+    [user, challenges, checkCompletionAndStreak, updateOfflineCache]
   );
 
-  // Reset single challenge
+  // Reset challenge
   const resetChallenge = useCallback(
     async (id: string) => {
       const updated = challenges.map((c) =>
         c.id === id ? { ...c, currentValue: 0 } : c
       );
       setChallenges(updated);
+      updateOfflineCache(updated);
       soundManager.playPop();
 
-      if (!user) {
-        saveGuestChallenges(updated);
-      } else {
+      if (user) {
         try {
           await supabase
             .from("challenges")
@@ -546,22 +791,20 @@ export function useAppData() {
             .eq("id", id)
             .eq("user_id", user.id);
         } catch (e) {
-          console.error("Error resetting challenge:", e);
+          console.warn("Cloud update pending:", e);
         }
       }
     },
-    [user, challenges]
+    [user, challenges, updateOfflineCache]
   );
 
   // Remove challenge
   const removeChallenge = useCallback(
     async (id: string) => {
       soundManager.playPop();
-      setChallenges((prev) => {
-        const next = prev.filter((c) => c.id !== id);
-        if (!user) saveGuestChallenges(next);
-        return next;
-      });
+      const updated = challenges.filter((c) => c.id !== id);
+      setChallenges(updated);
+      updateOfflineCache(updated);
 
       if (user) {
         try {
@@ -571,17 +814,92 @@ export function useAppData() {
             .eq("id", id)
             .eq("user_id", user.id);
         } catch (e) {
-          console.error("Error removing challenge:", e);
+          console.error("Error removing challenge from cloud:", e);
         }
       }
     },
-    [user]
+    [user, challenges, updateOfflineCache]
   );
+
+  // Use Streak Freeze ("Salvavidas de Racha")
+  const useStreakFreeze = useCallback(async (): Promise<boolean> => {
+    if (!streakFreezeAvailable) return false;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const recoveredStreak = Math.max(1, streakCount + 1);
+    const today = getLocalDateStr();
+
+    setStreakCount(recoveredStreak);
+    setLastCompletedDate(today);
+    localStorage.setItem("reto_streak_freeze_month", currentMonth);
+    setStreakFreezeAvailable(false);
+
+    if (user) {
+      try {
+        await supabase.from("user_streaks").upsert(
+          {
+            user_id: user.id,
+            streak_count: recoveredStreak,
+            last_completed_date: today,
+          },
+          { onConflict: "user_id" }
+        );
+      } catch (e) {
+        console.warn("Streak freeze sync error:", e);
+      }
+    } else {
+      localStorage.setItem("reto_guest_streak", String(recoveredStreak));
+      localStorage.setItem("reto_guest_last_date", today);
+    }
+    soundManager.playAchievement();
+    return true;
+  }, [streakFreezeAvailable, streakCount, user]);
+
+  // GDPR Account & Data Erasure (Right to be Forgotten - Art. 17 GDPR)
+  const deleteAccountData = useCallback(async (): Promise<boolean> => {
+    try {
+      if (user) {
+        // Cascade delete user data
+        await Promise.allSettled([
+          supabase.from("challenges").delete().eq("user_id", user.id),
+          supabase.from("daily_records").delete().eq("user_id", user.id),
+          supabase.from("user_streaks").delete().eq("user_id", user.id),
+          supabase.from("profiles").delete().eq("id", user.id),
+        ]);
+        // Clear all local cached data for this user
+        localStorage.removeItem(`reto_cache_${user.id}`);
+        localStorage.removeItem(`reto_meta_${user.id}`);
+        localStorage.removeItem(`reto_best_streak_${user.id}`);
+        await signOut();
+      } else {
+        // Clear all guest storage
+        localStorage.removeItem("reto_guest_challenges");
+        localStorage.removeItem("reto_guest_history");
+        localStorage.removeItem("reto_guest_streak");
+        localStorage.removeItem("reto_guest_best_streak");
+        localStorage.removeItem("reto_guest_last_date");
+        localStorage.removeItem("reto_guest_meta");
+        localStorage.removeItem("reto_guest_name");
+        localStorage.removeItem("reto_guest_weight");
+        localStorage.removeItem("reto_guest_height");
+        localStorage.removeItem("reto_guest_goal");
+        setChallenges(DEFAULT_GUEST_CHALLENGES);
+        setHistory([]);
+        setStreakCount(0);
+        setBestStreak(0);
+      }
+      return true;
+    } catch (e) {
+      console.error("Failed to delete account data:", e);
+      return false;
+    }
+  }, [user, signOut]);
 
   // Export full JSON backup
   const exportData = useCallback(() => {
     const data = {
-      version: 1,
+      version: 2,
+      platform: "Reto Diario",
+      user: user ? { id: user.id, email: user.email } : "guest",
       exportedAt: new Date().toISOString(),
       challenges,
       history,
@@ -590,7 +908,7 @@ export function useAppData() {
       lastCompletedDate,
     };
     return JSON.stringify(data, null, 2);
-  }, [challenges, history, streakCount, bestStreak, lastCompletedDate]);
+  }, [user, challenges, history, streakCount, bestStreak, lastCompletedDate]);
 
   // Import JSON backup
   const importData = useCallback(
@@ -613,39 +931,20 @@ export function useAppData() {
           setLastCompletedDate(parsed.lastCompletedDate);
         }
 
-        if (!user) {
-          localStorage.setItem(
-            "reto_guest_challenges",
-            JSON.stringify(parsed.challenges)
-          );
-          if (parsed.history) {
-            localStorage.setItem(
-              "reto_guest_history",
-              JSON.stringify(parsed.history)
-            );
-          }
-          localStorage.setItem(
-            "reto_guest_streak",
-            String(parsed.streakCount || 0)
-          );
-          localStorage.setItem(
-            "reto_guest_best_streak",
-            String(parsed.bestStreak || 0)
-          );
-          if (parsed.lastCompletedDate) {
-            localStorage.setItem(
-              "reto_guest_last_date",
-              parsed.lastCompletedDate
-            );
-          }
-        }
+        updateOfflineCache(
+          parsed.challenges,
+          parsed.history,
+          parsed.streakCount,
+          parsed.bestStreak,
+          parsed.lastCompletedDate
+        );
         return true;
       } catch (e) {
         console.error("Failed to import data:", e);
         return false;
       }
     },
-    [user]
+    [updateOfflineCache]
   );
 
   return {
@@ -656,6 +955,9 @@ export function useAppData() {
     lastCompletedDate,
     loading,
     isGuest,
+    syncStatus,
+    lastSyncedAt,
+    streakFreezeAvailable,
     addChallenge,
     updateChallenge,
     increment,
@@ -663,6 +965,8 @@ export function useAppData() {
     toggleComplete,
     resetChallenge,
     removeChallenge,
+    useStreakFreeze,
+    deleteAccountData,
     exportData,
     importData,
   };

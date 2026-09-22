@@ -3,6 +3,7 @@ import {
   getLocalDateStr,
   getYesterdayStr,
   daysBetweenDates,
+  DEFAULT_GUEST_CHALLENGES,
 } from "@/hooks/useAppData";
 import { calculateGamification } from "@/lib/achievements";
 import type { Challenge, DailyRecord } from "@/types/challenge";
@@ -23,6 +24,17 @@ describe("Habit Tracker Date & Streak Logic", () => {
     expect(daysBetweenDates("2026-08-31", "2026-09-01")).toBe(1);
     expect(daysBetweenDates("2026-09-01", "2026-09-01")).toBe(0);
     expect(daysBetweenDates("2026-08-20", "2026-09-01")).toBe(12);
+  });
+
+  it("should provide well-structured starter default challenges", () => {
+    expect(DEFAULT_GUEST_CHALLENGES.length).toBeGreaterThanOrEqual(4);
+    DEFAULT_GUEST_CHALLENGES.forEach((c) => {
+      expect(c.name).toBeDefined();
+      expect(c.targetValue).toBeGreaterThan(0);
+      expect(c.currentValue).toBe(0);
+      expect(c.unit).toBeDefined();
+      expect(c.category).toBeDefined();
+    });
   });
 });
 
@@ -61,10 +73,6 @@ describe("Gamification & Achievements Engine", () => {
 
   it("should calculate user XP and Level correctly", () => {
     const res = calculateGamification(sampleChallenges, sampleHistory, 2, 2);
-    // (4 historical completed + 2 today done) * 25 = 150 XP
-    // + 2 perfect days * 100 = 200 XP
-    // + 2 streak * 50 = 100 XP
-    // Total XP = 450 XP -> Level 2
     expect(res.xp).toBe(450);
     expect(res.level).toBe(2);
     expect(res.levelTitle).toBe("⚡ En Progreso");

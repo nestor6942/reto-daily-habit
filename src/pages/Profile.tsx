@@ -1,9 +1,19 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   ArrowLeft,
   User,
@@ -15,7 +25,12 @@ import {
   Bell,
   Crown,
   FileText,
-  Sparkles,
+  ShieldCheck,
+  Cloud,
+  Flame,
+  Trash2,
+  Lock,
+  ExternalLink,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
@@ -39,8 +54,20 @@ const FITNESS_GOALS = [
 export default function Profile() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { challenges, history, streakCount, bestStreak, exportData, importData } =
-    useAppData();
+  const {
+    challenges,
+    history,
+    streakCount,
+    bestStreak,
+    syncStatus,
+    lastSyncedAt,
+    streakFreezeAvailable,
+    useStreakFreeze,
+    deleteAccountData,
+    exportData,
+    importData,
+  } = useAppData();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState("");
@@ -52,6 +79,8 @@ export default function Profile() {
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
   const [pricingOpen, setPricingOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [subscription, setSubscription] = useState(subscriptionManager.getSubscription());
 
   const [remindersEnabled, setRemindersEnabled] = useState(
@@ -124,7 +153,7 @@ export default function Profile() {
 
       setSaving(false);
       if (error) {
-        toast.error("Error al guardar el perfil");
+        toast.error("Error al guardar el perfil en la nube");
         return;
       }
     } else {
@@ -135,7 +164,7 @@ export default function Profile() {
       setSaving(false);
     }
 
-    toast.success("¡Perfil guardado correctamente!");
+    toast.success("¡Perfil guardado correctamente y respaldado!");
     soundManager.playPop();
     navigate("/");
   };
@@ -175,7 +204,7 @@ export default function Profile() {
     a.download = `reto-diario-backup-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("¡Copia de seguridad descargada!");
+    toast.success("¡Copia de seguridad descargada en formato JSON!");
   };
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,11 +220,33 @@ export default function Profile() {
           toast.success("¡Datos restaurados con éxito!");
           navigate("/");
         } else {
-          toast.error("El archivo no tiene un formato válido");
+          toast.error("El archivo no tiene un formato válido de Reto Diario");
         }
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleActivateStreakFreeze = async () => {
+    const ok = await useStreakFreeze();
+    if (ok) {
+      toast.success("🛡️ ¡Salvavidas de Racha activado! Tu racha ha sido protegida.");
+    } else {
+      toast.error("Ya has utilizado tu salvavidas de racha este mes.");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    const ok = await deleteAccountData();
+    setIsDeleting(false);
+    setDeleteConfirmOpen(false);
+    if (ok) {
+      toast.success("Tus datos y cuenta han sido eliminados de forma definitiva (RGPD).");
+      navigate("/");
+    } else {
+      toast.error("Hubo un problema al procesar la eliminación.");
+    }
   };
 
   const bmi =
@@ -226,13 +277,13 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <PageMeta
         title="Mi perfil — Reto Diario"
-        description="Configura tu información física, membresía PRO, sonidos y copias de seguridad de Reto Diario."
+        description="Configura tu información física, membresía PRO, sonidos, copia de seguridad y gestión de privacidad RGPD en Reto Diario."
         path="/profile"
       />
-      <div className="mx-auto max-w-md px-4 pb-16">
+      <div className="mx-auto max-w-lg px-4 pb-16">
         {/* Header */}
         <motion.header
           className="flex items-center justify-between pt-6 pb-4"
@@ -241,10 +292,10 @@ export default function Profile() {
         >
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors font-semibold"
           >
             <ArrowLeft className="w-4 h-4" />
-            Volver
+            <span>Volver al inicio</span>
           </button>
           <div className="flex items-center gap-1">
             <ThemeToggle />
@@ -253,31 +304,79 @@ export default function Profile() {
                 size="icon"
                 variant="ghost"
                 onClick={signOut}
-                className="w-10 h-10 text-muted-foreground hover:text-destructive"
+                className="w-9 h-9 text-muted-foreground hover:text-destructive"
                 title="Cerrar sesión"
               >
-                <LogOut className="w-5 h-5" />
+                <LogOut className="w-4 h-4" />
               </Button>
             )}
           </div>
         </motion.header>
 
-        {/* Avatar */}
+        {/* Avatar & User Header */}
         <motion.div
-          className="flex flex-col items-center mb-5"
+          className="flex flex-col items-center mb-5 text-center"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-3 border border-primary/20">
+          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-2.5 border border-primary/25 shadow-sm">
             <User className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {displayName || (user ? "Mi Perfil" : "Usuario Invitado")}
+          <h1 className="text-2xl font-black tracking-tight text-foreground">
+            {displayName || (user ? "Atleta de Reto Diario" : "Usuario Invitado")}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {user?.email || "Modo almacenamiento local"}
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {user?.email || "Modo local (Crea una cuenta para guardar tus retos en la nube)"}
           </p>
+        </motion.div>
+
+        {/* Cloud Sync & Permanent Storage Card */}
+        <motion.div
+          className={`rounded-2xl border p-4 mb-4 shadow-sm transition-all ${
+            user
+              ? "bg-primary/5 border-primary/20"
+              : "bg-amber-500/10 border-amber-500/30"
+          }`}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  user
+                    ? "bg-primary/20 text-primary"
+                    : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                }`}
+              >
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                  Almacenamiento de Datos
+                </span>
+                <p className="font-extrabold text-sm text-foreground">
+                  {user ? "Respaldo Permanente en la Nube" : "Almacenamiento Local Temporal"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {user
+                    ? `Sincronizado con Supabase • ${syncStatus === "synced" ? "Al día" : "Sincronizando..."}`
+                    : "Tus retos se guardan en este navegador. Regístrate para que nunca se te borren."}
+                </p>
+              </div>
+            </div>
+
+            {!user && (
+              <Button
+                size="sm"
+                onClick={() => navigate("/auth")}
+                className="h-8 text-xs font-bold bg-primary text-primary-foreground rounded-xl shrink-0"
+              >
+                Crear cuenta
+              </Button>
+            )}
+          </div>
         </motion.div>
 
         {/* Subscription Membership Card */}
@@ -310,6 +409,41 @@ export default function Profile() {
           </div>
         </motion.div>
 
+        {/* Streak Rescue Shield Card */}
+        <motion.div
+          className="rounded-2xl border border-streak/20 bg-streak/5 p-4 mb-4 shadow-sm flex items-center justify-between gap-3"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-streak/20 text-streak flex items-center justify-center border border-streak/30 shrink-0">
+              <Flame className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <span>Salvavidas de Racha</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-streak/20 text-streak font-extrabold">
+                  1/mes
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {streakFreezeAvailable
+                  ? "Disponible: Recupérate de un día perdido sin romper tu racha."
+                  : "Ya has utilizado tu salvavidas de racha este mes."}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!streakFreezeAvailable}
+            onClick={handleActivateStreakFreeze}
+            className="h-8 text-xs font-bold border-streak/40 text-streak hover:bg-streak/10 shrink-0 rounded-xl"
+          >
+            {streakFreezeAvailable ? "Proteger Racha" : "Usado"}
+          </Button>
+        </motion.div>
+
         {/* BMI Card */}
         {bmi && bmiCategory && (
           <motion.div
@@ -320,14 +454,14 @@ export default function Profile() {
             <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
               Tu Índice de Masa Corporal (IMC)
             </p>
-            <p className="text-3xl font-extrabold text-foreground">{bmi}</p>
+            <p className="text-3xl font-black text-foreground mt-0.5">{bmi}</p>
             <p className={`text-sm font-bold ${bmiCategory.color}`}>
               {bmiCategory.label}
             </p>
           </motion.div>
         )}
 
-        {/* Form */}
+        {/* Physical Profile Form */}
         <motion.form
           onSubmit={handleSave}
           className="space-y-4"
@@ -335,9 +469,9 @@ export default function Profile() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">
-              Nombre
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+              Nombre o Apodo
             </label>
             <Input
               type="text"
@@ -345,13 +479,13 @@ export default function Profile() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={50}
-              className="h-11"
+              className="h-11 rounded-xl"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-foreground">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">
                 Peso (kg)
               </label>
               <Input
@@ -362,11 +496,11 @@ export default function Profile() {
                 min={20}
                 max={300}
                 step="0.1"
-                className="h-11"
+                className="h-11 rounded-xl"
               />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-foreground">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">
                 Altura (cm)
               </label>
               <Input
@@ -377,13 +511,13 @@ export default function Profile() {
                 min={100}
                 max={250}
                 step="0.1"
-                className="h-11"
+                className="h-11 rounded-xl"
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">
+            <label className="text-xs font-bold text-foreground uppercase tracking-wider">
               Objetivo Principal
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -392,10 +526,10 @@ export default function Profile() {
                   key={g.value}
                   type="button"
                   onClick={() => setGoal(goal === g.value ? "" : g.value)}
-                  className={`p-3 rounded-xl border text-xs sm:text-sm font-semibold text-left transition-all ${
+                  className={`p-2.5 rounded-xl border text-xs sm:text-sm font-semibold text-left transition-all ${
                     goal === g.value
                       ? "border-primary bg-primary/10 text-primary shadow-sm"
-                      : "border-border bg-background text-foreground hover:border-primary/50"
+                      : "border-border bg-card text-foreground hover:border-primary/50"
                   }`}
                 >
                   {g.label}
@@ -406,7 +540,7 @@ export default function Profile() {
 
           <Button
             type="submit"
-            className="w-full h-12 bg-primary text-primary-foreground font-semibold"
+            className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold text-xs sm:text-sm"
             disabled={saving}
           >
             <Save className="w-4 h-4 mr-2" />
@@ -416,7 +550,7 @@ export default function Profile() {
 
         {/* Coach / Trainer Report Export */}
         <div className="mt-8 space-y-3 pt-6 border-t">
-          <h3 className="text-sm font-bold text-foreground">
+          <h3 className="text-sm font-extrabold text-foreground">
             Herramientas Profesionales
           </h3>
 
@@ -431,9 +565,9 @@ export default function Profile() {
           </Button>
         </div>
 
-        {/* Preferences & Backup Settings */}
+        {/* Preferences & Sound */}
         <div className="mt-6 space-y-3 pt-4 border-t">
-          <h3 className="text-sm font-bold text-foreground">
+          <h3 className="text-sm font-extrabold text-foreground">
             Preferencias de la Aplicación
           </h3>
 
@@ -457,7 +591,7 @@ export default function Profile() {
               variant={soundEnabled ? "default" : "outline"}
               size="sm"
               onClick={toggleSound}
-              className="h-8 text-xs font-semibold"
+              className="h-8 text-xs font-semibold rounded-xl"
             >
               {soundEnabled ? "Activado" : "Silencio"}
             </Button>
@@ -474,7 +608,7 @@ export default function Profile() {
                   Recordatorios Diarios
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Notificaciones del navegador
+                  Notificaciones en tu dispositivo
                 </p>
               </div>
             </div>
@@ -483,15 +617,15 @@ export default function Profile() {
               variant={remindersEnabled ? "default" : "outline"}
               size="sm"
               onClick={toggleReminders}
-              className="h-8 text-xs font-semibold"
+              className="h-8 text-xs font-semibold rounded-xl"
             >
               {remindersEnabled ? "Activado" : "Activar"}
             </Button>
           </div>
 
           {/* Data Backup & Restore */}
-          <h3 className="text-sm font-bold text-foreground pt-3">
-            Copia de Seguridad y Datos
+          <h3 className="text-sm font-extrabold text-foreground pt-3">
+            Copia de Seguridad y Portabilidad (RGPD Art. 20)
           </h3>
 
           <div className="grid grid-cols-2 gap-2">
@@ -501,7 +635,7 @@ export default function Profile() {
               onClick={handleExport}
               className="h-11 rounded-xl text-xs font-semibold gap-1.5"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-4 h-4 text-primary" />
               Exportar JSON
             </Button>
 
@@ -511,7 +645,7 @@ export default function Profile() {
               onClick={() => fileInputRef.current?.click()}
               className="h-11 rounded-xl text-xs font-semibold gap-1.5"
             >
-              <Upload className="w-4 h-4" />
+              <Upload className="w-4 h-4 text-primary" />
               Restaurar Copia
             </Button>
 
@@ -524,7 +658,91 @@ export default function Profile() {
             />
           </div>
         </div>
+
+        {/* Legal & Privacy Compliance Center */}
+        <div className="mt-8 space-y-3 pt-6 border-t">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-extrabold text-foreground">
+              Centro Legal y Privacidad
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs font-medium">
+            <Link
+              to="/terms"
+              className="p-2.5 rounded-xl border bg-card hover:bg-muted transition-colors flex items-center justify-between"
+            >
+              <span>Términos de Uso</span>
+              <ExternalLink className="w-3 h-3 text-muted-foreground" />
+            </Link>
+            <Link
+              to="/privacy"
+              className="p-2.5 rounded-xl border bg-card hover:bg-muted transition-colors flex items-center justify-between"
+            >
+              <span>Privacidad RGPD</span>
+              <ExternalLink className="w-3 h-3 text-muted-foreground" />
+            </Link>
+            <Link
+              to="/cookies"
+              className="p-2.5 rounded-xl border bg-card hover:bg-muted transition-colors flex items-center justify-between"
+            >
+              <span>Política de Cookies</span>
+              <ExternalLink className="w-3 h-3 text-muted-foreground" />
+            </Link>
+            <Link
+              to="/legal"
+              className="p-2.5 rounded-xl border bg-card hover:bg-muted transition-colors flex items-center justify-between"
+            >
+              <span>Aviso Médico Legal</span>
+              <ExternalLink className="w-3 h-3 text-muted-foreground" />
+            </Link>
+          </div>
+
+          {/* Right to Erasure / GDPR Art. 17 */}
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="w-full text-xs text-destructive hover:text-destructive hover:bg-destructive/10 h-10 gap-1.5 rounded-xl"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Eliminar mi cuenta y suprimir mis datos (Derecho al Olvido)</span>
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {/* Delete Account Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="w-5 h-5" />
+              ¿Eliminar cuenta y todos tus datos?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground space-y-2">
+              <p>
+                Esta acción es <strong>definitiva e irreversible</strong> bajo el Artículo 17 del RGPD (Derecho a la Supresión).
+              </p>
+              <p>
+                Se borrarán permanentemente de nuestros servidores todos tus retos, marcas históricas de ejercicios, récords de racha y configuración de perfil.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="text-xs rounded-xl">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-bold rounded-xl"
+            >
+              {isDeleting ? "Eliminando..." : "Sí, eliminar permanentemente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Pricing Modal */}
       <PricingModal
